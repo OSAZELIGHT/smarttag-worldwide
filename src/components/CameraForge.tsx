@@ -1,0 +1,48 @@
+"use client";
+import React, { useRef, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+
+export default function CameraForge() {
+  const v = useRef<HTMLVideoElement>(null);
+  const [rec, setRec] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const start = async () => {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: true });
+      if (v.current) v.current.srcObject = s;
+      setRec(true);
+    } catch (e) {
+      alert("Camera Error: Please check permissions in your browser.");
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-6 p-4 bg-black/50 rounded-3xl border border-blue-500/30 backdrop-blur-md">
+      <div className="relative overflow-hidden rounded-2xl bg-gray-900 shadow-2xl aspect-video w-full max-w-lg">
+        <video ref={v} autoPlay playsInline muted className="h-full w-full object-cover" />
+        {!rec && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+            <button onClick={start} className="rounded-full bg-blue-600 px-6 py-3 font-black uppercase tracking-widest hover:bg-blue-700 transition-all">
+              Initialize Lens
+            </button>
+          </div>
+        )}
+      </div>
+      
+      {rec && (
+        <div className="flex gap-4">
+          <button className="h-16 w-16 rounded-full border-4 border-red-600 bg-transparent p-1">
+            <div className="h-full w-full rounded-full bg-red-600 hover:scale-95 transition-all"></div>
+          </button>
+          <button 
+            disabled={loading}
+            className="px-6 py-3 border border-yellow-400 text-yellow-400 font-bold rounded-lg uppercase text-xs"
+          >
+            {loading ? "Securing..." : "Save to Vault"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
