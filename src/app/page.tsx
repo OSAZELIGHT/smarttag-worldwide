@@ -61,6 +61,7 @@ export default function SmartTagHome() {
         supabase!.from("post_reactions").select("post_id").eq("user_id", authData.user.id).in("post_id", postIds),
         supabase!.from("comments").select("post_id").in("post_id", postIds),
         supabase!.from("post_media").select("post_id, storage_path, kind").in("post_id", postIds),
+        supabase!.from("follows").select("following_id").eq("follower_id", authData.user.id).eq("status", "accepted"),
       ]);
       if (!active) return;
       const profileMap = new Map((profiles ?? []).map(profile => [profile.id, profile]));
