@@ -37,12 +37,13 @@ export default function SmartTagHome() {
   const [commentDraft, setCommentDraft] = useState("");
   const [commentsByPost, setCommentsByPost] = useState<Record<string, CommentItem[]>>({});
   const [following, setFollowing] = useState<string[]>([]);
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [showStudio, setShowStudio] = useState(false);
   const [notice, setNotice] = useState("");
-  const visiblePosts = useMemo(() => filter === "Videos" ? posts.filter(p => p.kind === "video") : filter === "Photos" ? posts.filter(p => p.kind === "photo") : posts, [filter, posts]);
+  const visiblePosts = useMemo(() => filter === "Videos" ? posts.filter(p => p.kind === "video") : filter === "Photos" ? posts.filter(p => p.kind === "photo") : filter === "Following" ? posts.filter(p => p.authorId && followingIds.includes(p.authorId)) : posts, [filter, posts, followingIds]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -54,7 +55,7 @@ export default function SmartTagHome() {
       if (error || !rows?.length || !active) return;
       const authorIds = [...new Set(rows.map(row => row.author_id))];
       const postIds = rows.map(row => row.id);
-      const [{ data: profiles }, { data: reactions }, { data: mine }, { data: commentRows }, { data: mediaRows }] = await Promise.all([
+      const [{ data: profiles }, { data: reactions }, { data: mine }, { data: commentRows }, { data: mediaRows }, { data: followRows }] = await Promise.all([
         supabase!.from("profiles").select("id, username, display_name").in("id", authorIds),
         supabase!.from("post_reactions").select("post_id").in("post_id", postIds),
         supabase!.from("post_reactions").select("post_id").eq("user_id", authData.user.id).in("post_id", postIds),
@@ -79,7 +80,7 @@ export default function SmartTagHome() {
         const media = mediaMap.get(row.id);
         return { id: row.id, authorId: row.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: timeAgo(row.created_at), initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: row.body, tags: [], image: media?.kind === "image" ? media.url : undefined, video: media?.kind === "video" ? media.url : undefined, likes: Math.max(0, (counts.get(row.id) ?? 0) - (mineIds.has(row.id) ? 1 : 0)), comments: commentCounts.get(row.id) ?? 0, kind: media?.kind === "video" ? "video" as const : media?.kind === "image" ? "photo" as const : "text" as const };
       }));
-      setLiked((mine ?? []).map(reaction => reaction.post_id));
+      setLiked((mine ?? []).map(reaction => reaction.post_id));\n      setFollowingIds((followRows ?? []).map(row => row.following_id));
     }
     void loadSocialFeed();
     return () => { active = false; };
