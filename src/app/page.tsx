@@ -28,6 +28,7 @@ const navItems = [{ label: "Home", icon: "⌂" }, { label: "Explore", icon: "⌕
 
 export default function SmartTagHome() {
   const [active, setActive] = useState("Home");
+  const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("For you");
   const [posts, setPosts] = useState(starterPosts);
   const [liked, setLiked] = useState<Array<string | number>>([]);
@@ -194,7 +195,7 @@ export default function SmartTagHome() {
     <main className="st-app">
       <header className="st-topbar">
         <a className="st-brand" href="#" onClick={() => setActive("Home")}><span className="brand-mark">S</span><span>smart<span>tag</span></span></a>
-        <label className="st-search"><span>⌕</span><input placeholder="Search people, posts, topics..." aria-label="Search SmartTag" /><kbd>⌘ K</kbd></label>
+        <label className="st-search"><span>⌕</span><input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && searchTerm.trim()) window.location.assign("/people?q=" + encodeURIComponent(searchTerm.trim())); }} placeholder="Search people..." aria-label="Search SmartTag members" /><kbd>↵</kbd></label>
         <div className="top-actions"><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("Notifications will appear here when your account is connected.")}>♧<i /></button><Link href="/messages" className="icon-button grid place-items-center no-underline" aria-label="Open messages">✉</Link><Link href="/vault" className="icon-button grid place-items-center no-underline" aria-label="Open Smart Vault">▧</Link><Link className="mini-avatar blue grid place-items-center no-underline" href="/profile" aria-label="Open your profile settings">YO</Link></div>
       </header>
       <div className="st-layout">
