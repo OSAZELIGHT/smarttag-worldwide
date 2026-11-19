@@ -7,6 +7,7 @@ import CameraForge from "@/components/CameraForge";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type CommentItem = { id: string | number; author: string; body: string; time: string };
+type StoryItem = { id: string; name: string; initials: string; color: string; url: string; kind: "image" | "video"; caption: string };
 type Post = { id: string | number; authorId?: string; name: string; handle: string; time: string; initials: string; color: string; text: string; tags: string[]; image?: string; video?: string; likes: number; comments: number; kind: "photo" | "video" | "text" };
 
 const starterPosts: Post[] = [
@@ -33,6 +34,8 @@ export default function SmartTagHome() {
   const [posts, setPosts] = useState(starterPosts);
   const [liked, setLiked] = useState<Array<string | number>>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [liveStories, setLiveStories] = useState<StoryItem[]>([]);
+  const [activeStory, setActiveStory] = useState<StoryItem | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [commentingPostId, setCommentingPostId] = useState<string | number | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
@@ -90,6 +93,53 @@ export default function SmartTagHome() {
     void loadSocialFeed();
   return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+    let active = true;
+    async function loadStories() {
+      const { data: authData } = await supabase!.auth.getUser();
+      if (!authData.user) return;
+      const { data: rows, error } = await supabase!.from("stories")
+        .select("id, author_id, media_path, media_kind, caption")
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (error || !rows?.length || !active) return;
+      const authorIds = [...new Set(rows.map(row => row.author_id))];
+      const { data: profiles } = await supabase!.from("profiles")
+        .select("id, display_name")
+        .in("id", authorIds);
+      const profileMap = new Map((profiles ?? []).map(profile => [profile.id, profile.display_name]));
+      const items = await Promise.all(rows.map(async row => {
+        const { data: signed } = await supabase!.storage.from("story-media").createSignedUrl(row.media_path, 3600);
+        if (!signed?.signedUrl) return null;
+        const name = profileMap.get(row.author_id) ?? "SmartTag member";
+        return {
+          id: row.id,
+          name,
+          initials: name.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(),
+          color: "blue",
+          url: signed.signedUrl,
+          kind: row.media_kind === "video" ? "video" as const : "image" as const,
+          caption: row.caption,
+        };
+      }));
+      if (active) setLiveStories(items.filter((item): item is StoryItem => item !== null));
+    }
+    void loadStories();
+    return () => { active = false; };
+  }, []);
+
+  async function viewStory(story: StoryItem) {
+    setActiveStory(story);
+    if (!supabase) return;
+    const { data: authData } = await supabase.auth.getUser();
+    if (authData.user) {
+      const { error } = await supabase.from("story_views").insert({ story_id: story.id, viewer_id: authData.user.id });
+      if (error && error.code !== "23505") setNotice(error.message);
+    }
+  }
 
   async function toggleSave(postId: string | number) {
   const id = String(postId);
@@ -238,7 +288,7 @@ export default function SmartTagHome() {
           <div className="welcome-row"><div><p className="eyebrow">THURSDAY, NOVEMBER 19</p><h1>Your world, <span>your people.</span></h1><p className="welcome-sub">Catch up with your community.</p></div><div className="welcome-actions"><button className="studio-shortcut" onClick={() => setShowStudio(v => !v)}>◎ <span>Studio</span></button><button className="round-plus" onClick={() => setShowComposer(true)}>＋</button></div></div>
           {showStudio && <div className="studio-panel"><CameraForge /></div>}
           {notice && <div className="notice" role="status">{notice}<button onClick={() => setNotice("")}>×</button></div>}
-          <section className="stories-panel"><div className="section-heading"><div><h2>Stories</h2><p>Little moments from your people</p></div><button onClick={() => setNotice("Stories will be available when media publishing is connected.")}>See all <span>→</span></button></div><div className="stories-row">{stories.map((story, i) => <button className="story" key={story.name} onClick={() => setNotice(i === 0 ? "Story creation will be enabled with camera and media uploads." : story.name + "'s story preview is part of this interface demo.")}><span className={story.color === "add" ? "story-ring own-story" : "story-ring"}><span className={"avatar " + story.color}>{story.initials}</span></span><span>{story.name}</span></button>)}</div></section>
+          <section className="stories-panel"><div className="section-heading"><div><h2>Stories</h2><p>Little moments from your people</p></div><button onClick={() => setNotice("Stories will be available when media publishing is connected.")}>See all <span>→</span></button></div><div className="stories-row">{stories.slice(0, 1).map(story => <button className="story" key={story.name} onClick={() => setShowStudio(true)}><span className="story-ring own-story"><span className="avatar add">+</span></span><span>Your story</span></button>)}{liveStories.length ? liveStories.map(story => <button className="story" key={story.id} onClick={() => void viewStory(story)}><span className="story-ring"><span className={"avatar " + story.color}>{story.initials}</span></span><span>{story.name}</span></button>) : stories.slice(1).map(story => <button className="story" key={story.name} onClick={() => setNotice(story.name + "'s story preview is a demo until real stories are published.")}><span className="story-ring"><span className={"avatar " + story.color}>{story.initials}</span></span><span>{story.name}</span></button>)}</div></section>
           <section className="composer-card"><div className="avatar blue">YO</div><button className="composer-prompt" onClick={() => setShowComposer(true)}>Share something with your community...</button><button className="composer-tool photo-tool" onClick={() => setNotice("Photo uploads will be connected to Smart Vault.")}>▧ <span>Photo</span></button><button className="composer-tool video-tool" onClick={() => setNotice("Video uploads and short videos are on the product roadmap.")}>▷ <span>Video</span></button></section>
           <div className="feed-heading"><div><h2>Your feed</h2><p>Ideas, moments and conversations</p></div><div className="feed-filters">{["For you", "Following", "Photos", "Videos"].map(f => <button key={f} className={filter === f ? "filter active-filter" : "filter"} onClick={() => setFilter(f)}>{f}</button>)}</div></div>
           {visiblePosts.length === 0 && <div className="empty-state">No {filter.toLowerCase()} in this demo feed yet.</div>}
@@ -253,6 +303,7 @@ export default function SmartTagHome() {
         </aside>
       </div>
       {showComposer && <div className="modal-backdrop" onClick={() => setShowComposer(false)}><section className="composer-modal" onClick={e => e.stopPropagation()}><div className="modal-heading"><div><span className="eyebrow">CREATE SOMETHING</span><h2>Share with your world</h2></div><button onClick={() => setShowComposer(false)}>×</button></div><div className="modal-user"><div className="avatar blue">YO</div><div><strong>Your profile</strong><span>Sharing with your community</span></div></div><textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} placeholder="What's happening in your world?" /><div className="modal-tools"><label className="cursor-pointer">▧ Add photo/video<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" className="sr-only" onChange={event => { const file = event.target.files?.[0]; if (file) setSelectedFile(file); event.target.value = ""; }} /></label><span># Add tags</span></div>{selectedFile && <div className="mb-3 flex items-center justify-between rounded-lg bg-white/5 p-3 text-[10px] text-slate-300"><span className="truncate">{selectedFile.name} · {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB</span><button onClick={() => setSelectedFile(null)} className="ml-3 text-rose-300">Remove</button></div>}<button className="publish-button" disabled={(!draft.trim() && !selectedFile) || publishing} onClick={() => void publish()}>{publishing ? "Publishing…" : "Publish post"} <span>→</span></button><p className="demo-note">Text-only demo posts stay in this page session. Signed-in photo and video posts are saved to SmartTag.</p></section></div>}
+      {activeStory && <div className="modal-backdrop" onClick={() => setActiveStory(null)}><section className="story-viewer" onClick={event => event.stopPropagation()}><button className="story-close" onClick={() => setActiveStory(null)} aria-label="Close story">×</button><div className="story-viewer-media">{activeStory.kind === "video" ? <video src={activeStory.url} controls autoPlay playsInline className="h-full max-h-[75vh] w-full object-contain" /> : <Image src={activeStory.url} alt={activeStory.caption || activeStory.name + " story"} width={900} height={1200} unoptimized className="h-full max-h-[75vh] w-full object-contain" />}</div><div className="p-4"><strong className="text-xs">{activeStory.name}</strong>{activeStory.caption && <p className="mt-2 text-xs text-slate-300">{activeStory.caption}</p>}</div></section></div>}
       <nav className="mobile-nav">{navItems.map(item => item.label === "Explore" ? <Link key={item.label} href="/people"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Reels" ? <Link key={item.label} href="/reels"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Communities" ? <Link key={item.label} href="/communities"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Saved" ? <Link key={item.label} href="/saved"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Messages" ? <Link key={item.label} href="/messages"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Saved" ? <Link key={item.label} href="/vault" className=""><span>{item.icon}</span><small>{item.label}</small></Link> : <button key={item.label} className={active === item.label ? "mobile-active" : ""} onClick={() => setActive(item.label)}><span>{item.icon}</span><small>{item.label}</small></button>)}</nav>
     </main>
   );
