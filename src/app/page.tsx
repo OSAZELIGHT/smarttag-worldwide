@@ -24,7 +24,7 @@ function timeAgo(value: string) {
 }
 
 const stories = [{ name: "Your story", initials: "+", color: "add" }, { name: "Amara", initials: "AO", color: "coral" }, { name: "Daniel", initials: "DE", color: "blue" }, { name: "Mariam", initials: "MK", color: "gold" }, { name: "Tobi", initials: "TA", color: "violet" }, { name: "Creators", initials: "SC", color: "green" }];
-const navItems = [{ label: "Home", icon: "⌂" }, { label: "Explore", icon: "⌕" }, { label: "Reels", icon: "▷" }, { label: "Messages", icon: "✉" }, { label: "Communities", icon: "♧" }, { label: "Vault", icon: "▱" }];
+const navItems = [{ label: "Home", icon: "⌂" }, { label: "Explore", icon: "⌕" }, { label: "Reels", icon: "▷" }, { label: "Messages", icon: "✉" }, { label: "Communities", icon: "♧" }, { label: "Saved", icon: "▱" }, { label: "Vault", icon: "▧" }];
 
 export default function SmartTagHome() {
   const [active, setActive] = useState("Home");
@@ -32,6 +32,7 @@ export default function SmartTagHome() {
   const [filter, setFilter] = useState("For you");
   const [posts, setPosts] = useState(starterPosts);
   const [liked, setLiked] = useState<Array<string | number>>([]);
+  const [savedIds, setSavedIds] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [commentingPostId, setCommentingPostId] = useState<string | number | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
@@ -55,13 +56,14 @@ export default function SmartTagHome() {
       if (error || !rows?.length || !active) return;
       const authorIds = [...new Set(rows.map(row => row.author_id))];
       const postIds = rows.map(row => row.id);
-      const [{ data: profiles }, { data: reactions }, { data: mine }, { data: commentRows }, { data: mediaRows }, { data: followRows }] = await Promise.all([
+      const [{ data: profiles }, { data: reactions }, { data: mine }, { data: commentRows }, { data: mediaRows }, { data: followRows }, { data: savedRows }] = await Promise.all([
         supabase!.from("profiles").select("id, username, display_name").in("id", authorIds),
         supabase!.from("post_reactions").select("post_id").in("post_id", postIds),
         supabase!.from("post_reactions").select("post_id").eq("user_id", authData.user.id).in("post_id", postIds),
         supabase!.from("comments").select("post_id").in("post_id", postIds),
         supabase!.from("post_media").select("post_id, storage_path, kind").in("post_id", postIds),
         supabase!.from("follows").select("following_id").eq("follower_id", authData.user.id).eq("status", "accepted"),
+        supabase!.from("saved_posts").select("post_id").eq("user_id", authData.user.id),
       ]);
       if (!active) return;
       const profileMap = new Map((profiles ?? []).map(profile => [profile.id, profile]));
@@ -82,9 +84,31 @@ export default function SmartTagHome() {
         return { id: row.id, authorId: row.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: timeAgo(row.created_at), initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: row.body, tags: [], image: media?.kind === "image" ? media.url : undefined, video: media?.kind === "video" ? media.url : undefined, likes: Math.max(0, (counts.get(row.id) ?? 0) - (mineIds.has(row.id) ? 1 : 0)), comments: commentCounts.get(row.id) ?? 0, kind: media?.kind === "video" ? "video" as const : media?.kind === "image" ? "photo" as const : "text" as const };
       }));
       setLiked((mine ?? []).map(reaction => reaction.post_id));\n      setFollowingIds((followRows ?? []).map(row => row.following_id));
+      setSavedIds((savedRows ?? []).map(row => row.post_id));
     }
     void loadSocialFeed();
-    return () => { active = false; };
+    async function toggleSave(postId: string | number) {
+    const id = String(postId);
+    const alreadySaved = savedIds.includes(id);
+    if (typeof postId === "string" && isSupabaseConfigured && supabase) {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        setNotice("Sign in to save posts to your collection.");
+        return;
+      }
+      const result = alreadySaved
+        ? await supabase.from("saved_posts").delete().eq("user_id", authData.user.id).eq("post_id", id)
+        : await supabase.from("saved_posts").insert({ user_id: authData.user.id, post_id: id });
+      if (result.error) {
+        setNotice(result.error.message);
+        return;
+      }
+    }
+    setSavedIds(current => alreadySaved ? current.filter(item => item !== id) : [...current, id]);
+    setNotice(alreadySaved ? "Removed from your saved posts." : "Added to your saved posts.");
+  }
+
+  return () => { active = false; };
   }, []);
 
   async function publish() {
@@ -204,7 +228,7 @@ export default function SmartTagHome() {
         <aside className="left-sidebar">
           <div className="profile-mini"><div className="avatar blue">YO</div><div><strong>Your profile</strong><span>@yourprofile</span></div><span className="online-dot" /></div>
           <p className="side-label">YOUR SPACE</p>
-          <nav className="main-nav">{navItems.map(item => item.label === "Explore" ? <Link key={item.label} href="/people" className="nav-item"><span className="nav-icon">{item.icon}</span>{item.label}</Link> : item.label === "Messages" ? <Link key={item.label} href="/messages" className="nav-item"><span className="nav-icon">{item.icon}</span>{item.label}</Link> : item.label === "Vault" ? <Link key={item.label} href="/vault" className="nav-item"><span className="nav-icon">{item.icon}</span>{item.label}</Link> : <button key={item.label} className={active === item.label ? "nav-item selected" : "nav-item"} onClick={() => setActive(item.label)}><span className="nav-icon">{item.icon}</span>{item.label}{item.label === "Messages" && <b className="nav-count">3</b>}</button>)}</nav>
+          <nav className="main-nav">{navItems.map(item => item.label === "Explore" ? <Link key={item.label} href="/people" className="nav-item"><span className="nav-icon">{item.icon}</span>{item.label}</Link> : item.label === "Saved" ? <Link key={item.label} href="/saved" className="nav-item"><span className="nav-icon">{item.icon}</span>{item.label}</Link> : item.label === "Messages" ? <Link key={item.label} href="/messages" className="nav-item"><span className="nav-icon">{item.icon}</span>{item.label}</Link> : item.label === "Vault" ? <Link key={item.label} href="/vault" className="nav-item"><span className="nav-icon">{item.icon}</span>{item.label}</Link> : <button key={item.label} className={active === item.label ? "nav-item selected" : "nav-item"} onClick={() => setActive(item.label)}><span className="nav-icon">{item.icon}</span>{item.label}{item.label === "Messages" && <b className="nav-count">3</b>}</button>)}</nav>
           <button className="create-button" onClick={() => setShowComposer(true)}><span>＋</span> Create a post</button><Link className="vault-nav-link" href="/vault">▧ <span>My Smart Vault</span> →</Link>
           <div className="sidebar-bottom"><p className="side-label">YOUR COMMUNITIES</p><button className="community-link"><span className="community-dot amber">✦</span> Creators Circle <small>2.4k</small></button><button className="community-link"><span className="community-dot mint">⌘</span> Tech & Innovation <small>1.8k</small></button><button className="community-link"><span className="community-dot lilac">♫</span> Music Lounge <small>960</small></button><Link className="see-all" href="/people">Discover members →</Link><button className="see-all" onClick={() => setActive("Communities")}>Explore communities →</button></div>
           <div className="sidebar-footer">About · Privacy · Guidelines<br/>© 2026 SmartTag Worldwide</div>
@@ -217,7 +241,7 @@ export default function SmartTagHome() {
           <section className="composer-card"><div className="avatar blue">YO</div><button className="composer-prompt" onClick={() => setShowComposer(true)}>Share something with your community...</button><button className="composer-tool photo-tool" onClick={() => setNotice("Photo uploads will be connected to Smart Vault.")}>▧ <span>Photo</span></button><button className="composer-tool video-tool" onClick={() => setNotice("Video uploads and short videos are on the product roadmap.")}>▷ <span>Video</span></button></section>
           <div className="feed-heading"><div><h2>Your feed</h2><p>Ideas, moments and conversations</p></div><div className="feed-filters">{["For you", "Following", "Photos", "Videos"].map(f => <button key={f} className={filter === f ? "filter active-filter" : "filter"} onClick={() => setFilter(f)}>{f}</button>)}</div></div>
           {visiblePosts.length === 0 && <div className="empty-state">No {filter.toLowerCase()} in this demo feed yet.</div>}
-          {visiblePosts.map(post => <article className="post-card" key={post.id}><div className="post-header"><div className={"avatar " + post.color}>{post.initials}</div><div className="post-author"><strong>{post.name} <span className="verified">✓</span></strong><span>{post.handle} · {post.time}</span></div><button className="more-button" aria-label="More post options" onClick={() => setNotice("More post options will be available on published posts.")}>•••</button></div><p className="post-copy">{post.text}</p><div className="tag-row">{post.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>{post.image && <div className="post-image-wrap"><Image src={post.image} alt="Community post visual" width={1200} height={800} unoptimized className="post-image" /></div>}{post.video && <div className="post-image-wrap"><video src={post.video} controls playsInline className="post-image" /></div>}<div className="post-stats"><span>{post.likes + (liked.includes(post.id) ? 1 : 0)} appreciations</span><span>{post.comments} comments · Share</span></div><div className="post-actions"><button className={liked.includes(post.id) ? "post-action is-liked" : "post-action"} onClick={() => void toggleLike(post.id)}><span>♡</span> Appreciate</button><button className="post-action" onClick={() => void openComments(post.id)}><span>▢</span> Comment</button><button className="post-action" onClick={() => setNotice("Sharing will be enabled for published posts.")}><span>↗</span> Share</button><button className="post-action save-action" onClick={() => setNotice("Saved items will be available in your personal library.")}><span>▱</span></button></div>{commentingPostId === post.id && <div className="comment-thread"><div className="comment-list">{(commentsByPost[String(post.id)] ?? []).map(comment => <div className="comment-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p><small>{comment.time}</small></div>)}{(commentsByPost[String(post.id)] ?? []).length === 0 && <p className="no-comments">Start the conversation with a thoughtful comment.</p>}</div><form className="comment-form" onSubmit={event => { event.preventDefault(); void addComment(post.id); }}><input value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Write a comment..." maxLength={2000} aria-label="Write a comment" /><button type="submit" disabled={!commentDraft.trim()}>Send</button></form></div>}</article>)}
+          {visiblePosts.map(post => <article className="post-card" key={post.id}><div className="post-header"><div className={"avatar " + post.color}>{post.initials}</div><div className="post-author"><strong>{post.name} <span className="verified">✓</span></strong><span>{post.handle} · {post.time}</span></div><button className="more-button" aria-label="More post options" onClick={() => setNotice("More post options will be available on published posts.")}>•••</button></div><p className="post-copy">{post.text}</p><div className="tag-row">{post.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>{post.image && <div className="post-image-wrap"><Image src={post.image} alt="Community post visual" width={1200} height={800} unoptimized className="post-image" /></div>}{post.video && <div className="post-image-wrap"><video src={post.video} controls playsInline className="post-image" /></div>}<div className="post-stats"><span>{post.likes + (liked.includes(post.id) ? 1 : 0)} appreciations</span><span>{post.comments} comments · Share</span></div><div className="post-actions"><button className={liked.includes(post.id) ? "post-action is-liked" : "post-action"} onClick={() => void toggleLike(post.id)}><span>♡</span> Appreciate</button><button className="post-action" onClick={() => void openComments(post.id)}><span>▢</span> Comment</button><button className="post-action" onClick={() => setNotice("Sharing will be enabled for published posts.")}><span>↗</span> Share</button><button className={savedIds.includes(String(post.id)) ? "post-action save-action is-saved" : "post-action save-action"} aria-label={savedIds.includes(String(post.id)) ? "Remove saved post" : "Save post"} onClick={() => void toggleSave(post.id)}><span>{savedIds.includes(String(post.id)) ? "▣" : "▱"}</span></button></div>{commentingPostId === post.id && <div className="comment-thread"><div className="comment-list">{(commentsByPost[String(post.id)] ?? []).map(comment => <div className="comment-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p><small>{comment.time}</small></div>)}{(commentsByPost[String(post.id)] ?? []).length === 0 && <p className="no-comments">Start the conversation with a thoughtful comment.</p>}</div><form className="comment-form" onSubmit={event => { event.preventDefault(); void addComment(post.id); }}><input value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Write a comment..." maxLength={2000} aria-label="Write a comment" /><button type="submit" disabled={!commentDraft.trim()}>Send</button></form></div>}</article>)}
           <div className="feed-end"><span>✦</span><p>You&apos;re all caught up for now.</p><small>More from your world is on the way.</small></div>
         </section>
         <aside className="right-sidebar">
@@ -228,7 +252,7 @@ export default function SmartTagHome() {
         </aside>
       </div>
       {showComposer && <div className="modal-backdrop" onClick={() => setShowComposer(false)}><section className="composer-modal" onClick={e => e.stopPropagation()}><div className="modal-heading"><div><span className="eyebrow">CREATE SOMETHING</span><h2>Share with your world</h2></div><button onClick={() => setShowComposer(false)}>×</button></div><div className="modal-user"><div className="avatar blue">YO</div><div><strong>Your profile</strong><span>Sharing with your community</span></div></div><textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} placeholder="What's happening in your world?" /><div className="modal-tools"><label className="cursor-pointer">▧ Add photo/video<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" className="sr-only" onChange={event => { const file = event.target.files?.[0]; if (file) setSelectedFile(file); event.target.value = ""; }} /></label><span># Add tags</span></div>{selectedFile && <div className="mb-3 flex items-center justify-between rounded-lg bg-white/5 p-3 text-[10px] text-slate-300"><span className="truncate">{selectedFile.name} · {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB</span><button onClick={() => setSelectedFile(null)} className="ml-3 text-rose-300">Remove</button></div>}<button className="publish-button" disabled={(!draft.trim() && !selectedFile) || publishing} onClick={() => void publish()}>{publishing ? "Publishing…" : "Publish post"} <span>→</span></button><p className="demo-note">Text-only demo posts stay in this page session. Signed-in photo and video posts are saved to SmartTag.</p></section></div>}
-      <nav className="mobile-nav">{navItems.map(item => item.label === "Explore" ? <Link key={item.label} href="/people"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Messages" ? <Link key={item.label} href="/messages"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Saved" ? <Link key={item.label} href="/vault" className=""><span>{item.icon}</span><small>{item.label}</small></Link> : <button key={item.label} className={active === item.label ? "mobile-active" : ""} onClick={() => setActive(item.label)}><span>{item.icon}</span><small>{item.label}</small></button>)}</nav>
+      <nav className="mobile-nav">{navItems.map(item => item.label === "Explore" ? <Link key={item.label} href="/people"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Saved" ? <Link key={item.label} href="/saved"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Messages" ? <Link key={item.label} href="/messages"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Saved" ? <Link key={item.label} href="/vault" className=""><span>{item.icon}</span><small>{item.label}</small></Link> : <button key={item.label} className={active === item.label ? "mobile-active" : ""} onClick={() => setActive(item.label)}><span>{item.icon}</span><small>{item.label}</small></button>)}</nav>
     </main>
   );
 }
