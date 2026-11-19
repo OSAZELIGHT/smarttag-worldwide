@@ -244,6 +244,82 @@ $function$;
 revoke all on function public.is_conversation_member(uuid) from public;
 grant execute on function public.is_conversation_member(uuid) to authenticated;
 
+create or replace function public.notify_follow_event()
+returns trigger language plpgsql security definer set search_path = public, pg_temp
+as $function$
+begin
+  if new.follower_id <> new.following_id then
+    insert into public.notifications(recipient_id,actor_id,kind,entity_id)
+    values(new.following_id,new.follower_id,'follow',new.following_id);
+  end if;
+  return new;
+end;
+$function$;
+create trigger notify_follow_insert after insert on public.follows
+for each row execute procedure public.notify_follow_event();
+
+create or replace function public.notify_follow_accepted()
+returns trigger language plpgsql security definer set search_path = public, pg_temp
+as $function$
+begin
+  if old.status='pending' and new.status='accepted' then
+    insert into public.notifications(recipient_id,actor_id,kind,entity_id)
+    values(new.follower_id,new.following_id,'follow',new.following_id);
+  end if;
+  return new;
+end;
+$function$;
+create trigger notify_follow_accept after update of status on public.follows
+for each row execute procedure public.notify_follow_accepted();
+
+create or replace function public.notify_reaction_event()
+returns trigger language plpgsql security definer set search_path = public, pg_temp
+as $function$
+declare target_author uuid;
+begin
+  select author_id into target_author from public.posts where id=new.post_id;
+  if target_author is not null and target_author <> new.user_id then
+    insert into public.notifications(recipient_id,actor_id,kind,entity_id)
+    values(target_author,new.user_id,'reaction',new.post_id);
+  end if;
+  return new;
+end;
+$function$;
+create trigger notify_reaction_insert after insert on public.post_reactions
+for each row execute procedure public.notify_reaction_event();
+
+create or replace function public.notify_comment_event()
+returns trigger language plpgsql security definer set search_path = public, pg_temp
+as $function$
+declare target_author uuid;
+begin
+  select author_id into target_author from public.posts where id=new.post_id;
+  if target_author is not null and target_author <> new.author_id then
+    insert into public.notifications(recipient_id,actor_id,kind,entity_id)
+    values(target_author,new.author_id,'comment',new.post_id);
+  end if;
+  return new;
+end;
+$function$;
+create trigger notify_comment_insert after insert on public.comments
+for each row execute procedure public.notify_comment_event();
+
+create or replace function public.notify_message_event()
+returns trigger language plpgsql security definer set search_path = public, pg_temp
+as $function$
+begin
+  insert into public.notifications(recipient_id,actor_id,kind,entity_id)
+  select m.user_id,new.sender_id,'message',new.conversation_id
+  from public.conversation_members m
+  where m.conversation_id=new.conversation_id
+    and m.user_id <> new.sender_id
+    and not public.is_blocked_with(m.user_id);
+  return new;
+end;
+$function$;
+create trigger notify_message_insert after insert on public.messages
+for each row execute procedure public.notify_message_event();
+
 alter table public.profiles enable row level security;
 alter table public.follows enable row level security;
 alter table public.user_blocks enable row level security;
