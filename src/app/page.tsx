@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import CameraForge from "@/components/CameraForge";
 
 type Post = { id: number; name: string; handle: string; time: string; initials: string; color: string; text: string; tags: string[]; image?: string; likes: number; comments: number; kind: "photo" | "video" | "text" };
 
@@ -21,6 +22,7 @@ export default function SmartTagHome() {
   const [following, setFollowing] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [showComposer, setShowComposer] = useState(false);
+  const [showStudio, setShowStudio] = useState(false);
   const [notice, setNotice] = useState("");
   const visiblePosts = useMemo(() => filter === "Videos" ? posts.filter(p => p.kind === "video") : filter === "Photos" ? posts.filter(p => p.kind === "photo") : posts, [filter, posts]);
 
@@ -47,7 +49,8 @@ export default function SmartTagHome() {
           <div className="sidebar-footer">About · Privacy · Guidelines<br/>© 2026 SmartTag Worldwide</div>
         </aside>
         <section className="feed-column">
-          <div className="welcome-row"><div><p className="eyebrow">THURSDAY, NOVEMBER 19</p><h1>Your world, <span>your people.</span></h1><p className="welcome-sub">Catch up with your community.</p></div><button className="round-plus" onClick={() => setShowComposer(true)}>＋</button></div>
+          <div className="welcome-row"><div><p className="eyebrow">THURSDAY, NOVEMBER 19</p><h1>Your world, <span>your people.</span></h1><p className="welcome-sub">Catch up with your community.</p></div><div className="welcome-actions"><button className="studio-shortcut" onClick={() => setShowStudio(v => !v)}>◎ <span>Studio</span></button><button className="round-plus" onClick={() => setShowComposer(true)}>＋</button></div></div>
+          {showStudio && <div className="studio-panel"><CameraForge /></div>}
           {notice && <div className="notice" role="status">{notice}<button onClick={() => setNotice("")}>×</button></div>}
           <section className="stories-panel"><div className="section-heading"><div><h2>Stories</h2><p>Little moments from your people</p></div><button onClick={() => setNotice("Stories will be available when media publishing is connected.")}>See all <span>→</span></button></div><div className="stories-row">{stories.map((story, i) => <button className="story" key={story.name} onClick={() => setNotice(i === 0 ? "Story creation will be enabled with camera and media uploads." : story.name + "'s story preview is part of this interface demo.")}><span className={story.color === "add" ? "story-ring own-story" : "story-ring"}><span className={"avatar " + story.color}>{story.initials}</span></span><span>{story.name}</span></button>)}</div></section>
           <section className="composer-card"><div className="avatar blue">YO</div><button className="composer-prompt" onClick={() => setShowComposer(true)}>Share something with your community...</button><button className="composer-tool photo-tool" onClick={() => setNotice("Photo uploads will be connected to Smart Vault.")}>▧ <span>Photo</span></button><button className="composer-tool video-tool" onClick={() => setNotice("Video uploads and short videos are on the product roadmap.")}>▷ <span>Video</span></button></section>
