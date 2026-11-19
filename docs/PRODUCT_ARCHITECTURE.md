@@ -46,6 +46,10 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 - [x] Add member discovery, follow/unfollow and private follow-request approval.
 - [x] Add photo/video post uploads and a private Smart Vault media library.
 - [x] Add a basic one-to-one messaging inbox with private conversation membership.
+- [x] Add saved posts and a dedicated saved collection.
+- [x] Add community creation, public membership and private community shells.
+- [x] Add video discovery and a Reels feed.
+- [x] Add story publishing, expiry-aware feed loading and a story viewer.
 - [ ] Add server-enforced authenticated route protection.
 
 ### Stage 2 — working social foundation
@@ -80,7 +84,7 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 
 ## Current prototype limitations
 
-The home feed includes demo examples and can load visible posts for signed-in users. Authenticated users can publish text and photo/video posts, react and comment; demo-only sample posts remain local. Member discovery supports follow/unfollow and private-profile requests. Profile settings support editing and request approval. The capture studio can record photos/videos, accept device uploads, download locally, and upload captures with a title and tags to the private Smart Vault. The Vault supports signed previews, tag/search filtering and deletion. Basic one-to-one text messaging is implemented; realtime delivery, group messaging, stories, communities, trending search, saved posts and production moderation remain unfinished.
+The home feed includes demo examples and can load visible posts for signed-in users. Authenticated users can publish text and photo/video posts, react and comment; demo-only sample posts remain local. Member discovery supports follow/unfollow and private-profile requests. Profile settings support editing and request approval. The capture studio can record photos/videos, accept device uploads, download locally, and upload captures with a title and tags to the private Smart Vault. The Vault supports signed previews, tag/search filtering and deletion. Basic one-to-one text messaging is implemented without realtime delivery. Stories can be published and viewed with a 24-hour expiry; community creation and public joining, saved posts, and video discovery are present. Group messaging, realtime notifications, community posts/moderation, automated story cleanup, advanced search and production moderation remain unfinished.
 
 ## Required environment
 
