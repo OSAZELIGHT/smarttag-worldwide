@@ -282,7 +282,7 @@ create policy community_members_delete on public.community_members for delete to
 create policy conversations_read on public.conversations for select to authenticated using (public.is_conversation_member(id));
 create policy conversations_insert on public.conversations for insert to authenticated with check (created_by=auth.uid());
 create policy conversation_members_read on public.conversation_members for select to authenticated using (public.is_conversation_member(conversation_id));
-create policy conversation_members_insert on public.conversation_members for insert to authenticated with check (public.is_conversation_creator(conversation_id));
+create policy conversation_members_insert on public.conversation_members for insert to authenticated with check (public.is_conversation_creator(conversation_id) and not public.is_blocked_with(user_id));
 create policy messages_read on public.messages for select to authenticated using (deleted_at is null and public.is_conversation_member(conversation_id));
 create policy messages_insert on public.messages for insert to authenticated with check (sender_id=auth.uid() and public.is_conversation_member(conversation_id) and (media_path is null or (storage.foldername(media_path))[1]=auth.uid()::text));
 create policy messages_update on public.messages for update to authenticated using (sender_id=auth.uid() and public.is_conversation_member(conversation_id)) with check (sender_id=auth.uid() and public.is_conversation_member(conversation_id) and (media_path is null or (storage.foldername(media_path))[1]=auth.uid()::text));
