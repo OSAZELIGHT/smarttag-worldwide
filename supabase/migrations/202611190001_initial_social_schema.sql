@@ -103,6 +103,14 @@ create table public.post_reactions (
   reaction public.reaction_kind not null default 'like',
   created_at timestamptz not null default now(), primary key(post_id,user_id)
 );
+create table public.saved_posts (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  post_id uuid not null references public.posts(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key(user_id,post_id)
+);
+create index saved_posts_user_created_idx on public.saved_posts(user_id,created_at desc);
+
 create table public.stories (
   id uuid primary key default gen_random_uuid(),
   author_id uuid not null references public.profiles(id) on delete cascade,
@@ -233,6 +241,7 @@ alter table public.post_media enable row level security;
 alter table public.media_assets enable row level security;
 alter table public.comments enable row level security;
 alter table public.post_reactions enable row level security;
+alter table public.saved_posts enable row level security;
 alter table public.stories enable row level security;
 alter table public.story_views enable row level security;
 alter table public.communities enable row level security;
@@ -271,6 +280,9 @@ create policy comments_delete on public.comments for delete to authenticated usi
 create policy reactions_read on public.post_reactions for select to authenticated using (true);
 create policy reactions_insert on public.post_reactions for insert to authenticated with check (user_id=auth.uid());
 create policy reactions_delete on public.post_reactions for delete to authenticated using (user_id=auth.uid());
+create policy saved_posts_read on public.saved_posts for select to authenticated using (user_id=auth.uid());
+create policy saved_posts_insert on public.saved_posts for insert to authenticated with check (user_id=auth.uid() and exists(select 1 from public.posts p where p.id=post_id and p.deleted_at is null));
+create policy saved_posts_delete on public.saved_posts for delete to authenticated using (user_id=auth.uid());
 create policy stories_read on public.stories for select to authenticated using (expires_at>now() and not public.is_blocked_with(author_id) and (author_id=auth.uid() or (exists(select 1 from public.profiles p where p.id=author_id and not p.is_private)) or exists(select 1 from public.follows f where f.follower_id=auth.uid() and f.following_id=author_id and f.status='accepted')));
 create policy stories_insert on public.stories for insert to authenticated with check (author_id=auth.uid() and (storage.foldername(media_path))[1]=auth.uid()::text);
 create policy stories_delete on public.stories for delete to authenticated using (author_id=auth.uid());
