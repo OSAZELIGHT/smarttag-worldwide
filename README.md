@@ -45,7 +45,7 @@ The intended production architecture uses Supabase for authentication, relationa
 
 ## Current development status
 
-The social experience is being built in stages. The current branch includes a responsive social home, Supabase email sign-up/sign-in, profile editing and private follow requests, member discovery, persistent text/photo/video posts, comments and reactions, a one-to-one text messaging inbox, a browser Capture Studio, and a private Smart Vault with media uploads, tags, signed previews and deletion. Stories, public communities, video discovery and saved posts now have working first-pass experiences. Group messaging, realtime notifications, community posts/moderation, automated story cleanup and production administration remain in development.
+The social experience is being built in stages. The current branch includes a responsive social home, Supabase email sign-up/sign-in, profile editing and private follow requests, member discovery, persistent text/photo/video posts, comments and reactions, a one-to-one text messaging inbox, a browser Capture Studio, and a private Smart Vault with media uploads, tags, signed previews and deletion. Stories, public communities, video discovery and saved posts now have working first-pass experiences. Group messaging, realtime message delivery, community posts/moderation, automated story cleanup and production administration remain in development. Core follow, reaction, comment and message notifications are stored and visible in the notifications inbox.
 
 Before public launch, the project still needs:
 1. Supabase project configuration and environment variables.
