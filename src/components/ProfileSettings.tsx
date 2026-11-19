@@ -112,6 +112,10 @@ export default function ProfileSettings() {
       setError(result.error.message);
       return;
     }
+    if (accept && result.data !== true) {
+      setError("This follower request is no longer pending.");
+      return;
+    }
     setRequests(current => current.filter(request => request.follower_id !== followerId));
     setMessage(accept ? "Follower request approved." : "Follower request declined.");
   }
