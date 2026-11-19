@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export default function AuthForm() {
@@ -58,7 +59,7 @@ export default function AuthForm() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#090b12] px-4 py-12 text-white">
       <section className="w-full max-w-md rounded-3xl border border-white/10 bg-[#121927] p-7 shadow-2xl sm:p-9">
-        <a href="/" className="mb-9 inline-flex items-center gap-3 text-xl font-black tracking-tight"><span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-300 to-indigo-600 text-slate-950">S</span>smart<span className="-ml-3 text-blue-300">tag</span></a>
+        <Link href="/" className="mb-9 inline-flex items-center gap-3 text-xl font-black tracking-tight"><span className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-300 to-indigo-600 text-slate-950">S</span>smart<span className="-ml-3 text-blue-300">tag</span></a>
         <p className="text-[10px] font-bold uppercase tracking-[.22em] text-blue-300">YOUR WORLD. YOUR PEOPLE.</p>
         <h1 className="mt-3 text-3xl font-black tracking-tight">{mode === "signup" ? "Join the community." : "Welcome back."}</h1>
         <p className="mt-2 text-sm leading-6 text-slate-400">{mode === "signup" ? "Create your SmartTag identity and start connecting." : "Sign in to continue to your SmartTag community."}</p>
