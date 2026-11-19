@@ -10,7 +10,6 @@ export default function CameraForge() {
   const [cameraOn, setCameraOn] = useState(false);
   const [recording, setRecording] = useState(false);
   const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => () => {
     recorderRef.current?.stop();
@@ -101,7 +100,7 @@ export default function CameraForge() {
       </div>
       {message && <p className="mt-3 rounded-lg bg-blue-400/10 p-3 text-xs leading-5 text-blue-100" role="status">{message}</p>}
       <div className="mt-4 flex flex-wrap gap-2">
-        {!cameraOn ? <button onClick={startCamera} disabled={busy} className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-bold text-white hover:bg-blue-500">Enable camera</button> : <>
+        {!cameraOn ? <button onClick={startCamera} className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-bold text-white hover:bg-blue-500">Enable camera</button> : <>
           <button onClick={capturePhoto} className="rounded-xl border border-white/15 px-4 py-3 text-xs font-bold text-white hover:bg-white/10">◎ Capture photo</button>
           {!recording ? <button onClick={startRecording} className="rounded-xl border border-red-400/40 px-4 py-3 text-xs font-bold text-red-200 hover:bg-red-400/10">● Record video</button> : <button onClick={() => { recorderRef.current?.stop(); setRecording(false); }} className="rounded-xl bg-red-600 px-4 py-3 text-xs font-bold text-white">Stop recording</button>}
           <button onClick={stopCamera} className="ml-auto rounded-xl border border-white/10 px-4 py-3 text-xs text-slate-300">Turn off</button>
