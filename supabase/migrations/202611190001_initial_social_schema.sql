@@ -170,6 +170,9 @@ create table public.content_reports (
   check(num_nonnulls(post_id,comment_id,reported_user_id) = 1)
 );
 
+create index follows_following_status_idx on public.follows(following_id,status);
+create index follows_follower_status_idx on public.follows(follower_id,status);
+create index conversation_members_user_idx on public.conversation_members(user_id,conversation_id);
 create index posts_feed_idx on public.posts(created_at desc) where visibility='public' and deleted_at is null;
 create index posts_author_idx on public.posts(author_id,created_at desc) where deleted_at is null;
 create index comments_post_idx on public.comments(post_id,created_at) where deleted_at is null;
