@@ -1,32 +1,44 @@
 "use client";
-export const dynamic = 'force-dynamic';
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+
+import { useEffect, useState } from "react";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export default function AdminControl() {
-  const [list, setList] = useState<any[]>([]);
+  const [status, setStatus] = useState("Checking administrator access…");
+
   useEffect(() => {
-    const getData = async () => {
-      const { data } = await supabase.from('waitlist').select('*').order('created_at', { ascending: false });
-      if (data) setList(data);
-    };
-    getData();
+    let active = true;
+    async function checkAccess() {
+      if (!isSupabaseConfigured || !supabase) {
+        if (active) setStatus("Supabase is not configured. Connect the project and complete the authentication setup before enabling administration.");
+        return;
+      }
+      const { data, error } = await supabase.auth.getUser();
+      if (!active) return;
+      if (error || !data.user) {
+        setStatus("Sign in with an authorized administrator account to continue.");
+        return;
+      }
+      if (data.user.app_metadata?.role !== "admin") {
+        setStatus("This account does not have administrator privileges.");
+        return;
+      }
+      setStatus("Administrator identity verified. The management modules will appear after the protected database policies and admin tools are installed.");
+    }
+    void checkAccess();
+    return () => { active = false; };
   }, []);
 
   return (
-    <div className="min-h-screen bg-black p-10 text-white font-sans">
-      <h1 className="text-4xl font-black text-blue-500 mb-2 tracking-tighter">GC SMART COMMAND</h1>
-      <p className="text-gray-500 mb-10 uppercase tracking-widest text-xs">Proprietor: Osaze Light World</p>
-      <div className="grid gap-4">
-        {list.length === 0 ? <p className="text-gray-600">Awaiting Founding Snappers...</p> : 
-          list.map((user) => (
-            <div key={user.id} className="p-4 border border-white/10 bg-white/5 rounded-lg flex justify-between items-center">
-              <span className="font-mono text-blue-400">{user.email}</span>
-              <span className="text-yellow-500 font-bold text-xs uppercase tracking-widest">Founding Snapper</span>
-            </div>
-          ))
-        }
-      </div>
-    </div>
+    <main className="min-h-screen bg-[#090b12] px-5 py-16 text-white">
+      <section className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-[#111827] p-8">
+        <p className="text-xs font-bold uppercase tracking-[.2em] text-blue-300">GC Smart Technology</p>
+        <h1 className="mt-3 text-3xl font-black tracking-tight">SmartTag Control Centre</h1>
+        <p className="mt-2 text-sm text-slate-400">Platform administration and community safety.</p>
+        <div className="mt-8 rounded-xl border border-blue-300/20 bg-blue-400/5 p-5 text-sm leading-7 text-slate-200" role="status">{status}</div>
+        <p className="mt-5 text-xs leading-6 text-slate-500">Administrative data is intentionally not queried from this public page. Production administration must be enforced by server-side authorization and Supabase row-level security, not by hiding interface elements.</p>
+        <a className="mt-6 inline-block text-sm text-blue-300 hover:text-blue-200" href="/">← Return to SmartTag</a>
+      </section>
+    </main>
   );
 }
