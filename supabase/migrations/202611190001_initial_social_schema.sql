@@ -202,6 +202,22 @@ create index messages_conversation_created_idx on public.messages(conversation_i
 create index notifications_inbox_idx on public.notifications(recipient_id, created_at desc);
 create index community_members_user_idx on public.community_members(user_id);
 
+create or replace function public.is_blocked_with(target_user_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select exists (
+    select 1 from public.user_blocks b
+    where (b.blocker_id = auth.uid() and b.blocked_id = target_user_id)
+       or (b.blocker_id = target_user_id and b.blocked_id = auth.uid())
+  );
+$;
+revoke all on function public.is_blocked_with(uuid) from public;
+grant execute on function public.is_blocked_with(uuid) to authenticated;
+
 -- RLS is enabled on every user-facing table. Policies below are a conservative
 -- first pass; expand visibility rules only with explicit product requirements.
 alter table public.profiles enable row level security;
@@ -223,18 +239,18 @@ alter table public.hashtags enable row level security;
 alter table public.post_hashtags enable row level security;
 alter table public.content_reports enable row level security;
 
-create policy "Profiles respect privacy and blocks" on public.profiles for select to authenticated using ((not is_private or id = auth.uid() or exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = id)) and not exists (select 1 from public.user_blocks b where (b.blocker_id = auth.uid() and b.blocked_id = id) or (b.blocker_id = id and b.blocked_id = auth.uid())));
+create policy "Profiles respect privacy and blocks" on public.profiles for select to authenticated using ((not is_private or id = auth.uid() or exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = id)) and not public.is_blocked_with(id));
 create policy "Members create their own profile" on public.profiles for insert to authenticated with check (id = auth.uid());
 create policy "Members update their own profile" on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
-create policy "Follow relationships exclude blocked accounts" on public.follows for select to authenticated using (not exists (select 1 from public.user_blocks b where (b.blocker_id = auth.uid() and b.blocked_id in (follower_id, following_id)) or (b.blocked_id = auth.uid() and b.blocker_id in (follower_id, following_id))));
-create policy "Members follow from their own account" on public.follows for insert to authenticated with check (follower_id = auth.uid() and not exists (select 1 from public.user_blocks b where (b.blocker_id = follower_id and b.blocked_id = following_id) or (b.blocker_id = following_id and b.blocked_id = follower_id)));
+create policy "Follow relationships exclude blocked accounts" on public.follows for select to authenticated using (not public.is_blocked_with(follower_id) and not public.is_blocked_with(following_id));
+create policy "Members follow from their own account" on public.follows for insert to authenticated with check (follower_id = auth.uid() and not public.is_blocked_with(following_id));
 create policy "Members unfollow from their own account" on public.follows for delete to authenticated using (follower_id = auth.uid());
 create policy "Members see blocks they created" on public.user_blocks for select to authenticated using (blocker_id = auth.uid());
 create policy "Members block from their own account" on public.user_blocks for insert to authenticated with check (blocker_id = auth.uid());
 create policy "Members unblock from their own account" on public.user_blocks for delete to authenticated using (blocker_id = auth.uid());
 
-create policy "Public posts and own posts are readable" on public.posts for select to authenticated using (deleted_at is null and not exists (select 1 from public.user_blocks b where (b.blocker_id = auth.uid() and b.blocked_id = author_id) or (b.blocker_id = author_id and b.blocked_id = auth.uid())) and (visibility = 'public' or author_id = auth.uid() or (visibility = 'followers' and exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = author_id))));
+create policy "Public posts and own posts are readable" on public.posts for select to authenticated using (deleted_at is null and not public.is_blocked_with(author_id) and (visibility = 'public' or author_id = auth.uid() or (visibility = 'followers' and exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = author_id))));
 create policy "Members create posts as themselves" on public.posts for insert to authenticated with check (author_id = auth.uid());
 create policy "Authors update their own posts" on public.posts for update to authenticated using (author_id = auth.uid()) with check (author_id = auth.uid());
 create policy "Authors delete their own posts" on public.posts for delete to authenticated using (author_id = auth.uid());
@@ -251,7 +267,7 @@ create policy "Reactions visible to signed-in members" on public.post_reactions 
 create policy "Members react as themselves" on public.post_reactions for insert to authenticated with check (user_id = auth.uid());
 create policy "Members remove own reactions" on public.post_reactions for delete to authenticated using (user_id = auth.uid());
 
-create policy "Active stories respect profile privacy" on public.stories for select to authenticated using (expires_at > now() and (author_id = auth.uid() or exists (select 1 from public.profiles p where p.id = author_id and not p.is_private) or exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = author_id)));
+create policy "Active stories respect profile privacy" on public.stories for select to authenticated using (expires_at > now() and not public.is_blocked_with(author_id) and (author_id = auth.uid() or exists (select 1 from public.profiles p where p.id = author_id and not p.is_private) or exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = author_id)));
 create policy "Members publish their own stories" on public.stories for insert to authenticated with check (author_id = auth.uid());
 create policy "Members delete own stories" on public.stories for delete to authenticated using (author_id = auth.uid());
 create policy "Viewers record their own story views" on public.story_views for insert to authenticated with check (viewer_id = auth.uid());
