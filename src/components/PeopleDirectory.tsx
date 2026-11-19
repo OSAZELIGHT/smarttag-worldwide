@@ -2,17 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type Person = { id: string; username: string; display_name: string; bio: string; is_private: boolean };
 type FollowState = "pending" | "accepted";
 
 export default function PeopleDirectory() {
+  const router = useRouter();
   const [people, setPeople] = useState<Person[]>([]);
   const [relationships, setRelationships] = useState<Record<string, FollowState>>({});
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [messageBusyId, setMessageBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
 
   const load = useCallback(async () => {
@@ -84,7 +87,7 @@ export default function PeopleDirectory() {
           return <article key={person.id} className="rounded-2xl border border-white/10 bg-[#121927] p-5">
             <div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-blue-300 to-indigo-700 text-xs font-black text-slate-950">{person.display_name.split(/\s+/).map(part => part[0]).join("").slice(0,2).toUpperCase()}</div><div className="min-w-0"><h2 className="truncate text-sm font-bold">{person.display_name}</h2><p className="mt-1 text-[10px] text-slate-500">@{person.username}{person.is_private ? " · Private" : ""}</p></div></div>
             <p className="mt-4 min-h-10 text-xs leading-5 text-slate-400">{person.bio || "A SmartTag member. Say hello and start a conversation."}</p>
-            <button onClick={() => void toggleFollow(person)} disabled={busyId === person.id} className={state === "accepted" ? "mt-4 w-full rounded-xl border border-emerald-400/20 bg-emerald-400/5 py-2.5 text-xs font-bold text-emerald-200 disabled:opacity-50" : "mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white disabled:opacity-50"}>{busyId === person.id ? "Please wait…" : state === "pending" ? "Cancel request" : state === "accepted" ? "Following · Remove" : person.is_private ? "Request to follow" : "＋ Follow"}</button>
+            <div className="mt-4 grid grid-cols-2 gap-2"><button onClick={() => void toggleFollow(person)} disabled={busyId === person.id} className={state === "accepted" ? "rounded-xl border border-emerald-400/20 bg-emerald-400/5 py-2.5 text-[10px] font-bold text-emerald-200 disabled:opacity-50" : "rounded-xl bg-blue-600 py-2.5 text-[10px] font-bold text-white disabled:opacity-50"}>{busyId === person.id ? "Please wait…" : state === "pending" ? "Cancel request" : state === "accepted" ? "Following · Remove" : person.is_private ? "Request to follow" : "＋ Follow"}</button><button onClick={() => void startConversation(person)} disabled={messageBusyId === person.id} className="rounded-xl border border-white/10 py-2.5 text-[10px] font-bold text-slate-200 disabled:opacity-50">{messageBusyId === person.id ? "Opening…" : "✉ Message"}</button></div>
           </article>;
         })}</div>}
       </div>
