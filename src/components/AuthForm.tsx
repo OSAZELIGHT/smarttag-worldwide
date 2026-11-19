@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
@@ -16,7 +16,7 @@ export default function AuthForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     setError("");
