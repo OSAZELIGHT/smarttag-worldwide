@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type Profile = { username: string; display_name: string; bio: string; is_private: boolean };
+type FollowRequest = { follower_id: string; display_name: string; username: string };
 
 export default function ProfileSettings() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile>({ username: "", display_name: "", bio: "", is_private: false });
   const [email, setEmail] = useState("");
+  const [requests, setRequests] = useState<FollowRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -40,7 +42,7 @@ export default function ProfileSettings() {
 
   useEffect(() => { void load(); }, [load]);
 
-  async function save(event: React.FormEvent<HTMLFormElement>) {
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || saving) return;
     setSaving(true);
@@ -73,7 +75,7 @@ export default function ProfileSettings() {
     setSaving(false);
   }
 
-  async function signOut() {
+  async function handleRequest(followerId: string, accept: boolean) {\n    if (!supabase) return;\n    const result = accept\n      ? await supabase.rpc("accept_follow_request", { target_follower_id: followerId })\n      : await supabase.from("follows").delete().eq("follower_id", followerId).eq("following_id", (await supabase.auth.getUser()).data.user?.id ?? "");\n    if (result.error) { setError(result.error.message); return; }\n    setRequests(current => current.filter(request => request.follower_id !== followerId));\n    setMessage(accept ? "Follower request approved." : "Follower request declined.");\n  }\n\n  async function signOut() {
     if (!supabase) return;
     await supabase.auth.signOut();
     router.push("/auth");
@@ -88,7 +90,7 @@ export default function ProfileSettings() {
           <p className="text-[10px] font-bold uppercase tracking-[.2em] text-blue-300">YOUR IDENTITY</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight">Profile settings</h1>
           <p className="mt-2 text-sm text-slate-400">Choose how people see you across SmartTag.</p>
-          {loading ? <p className="mt-8 text-sm text-slate-500">Loading your profile…</p> : error && !email ? <div className="mt-7 rounded-xl border border-amber-300/20 bg-amber-300/5 p-4 text-xs leading-6 text-amber-100">{error}<div className="mt-3"><Link href="/auth" className="font-bold underline">Go to sign in</Link></div></div> : <form onSubmit={save} className="mt-8 space-y-5">
+          {loading ? <p className="mt-8 text-sm text-slate-500">Loading your profile…</p> : error && !email ? <div className="mt-7 rounded-xl border border-amber-300/20 bg-amber-300/5 p-4 text-xs leading-6 text-amber-100">{error}<div className="mt-3"><Link href="/auth" className="font-bold underline">Go to sign in</Link></div></div> : {requests.length > 0 && <section className="mb-7 rounded-xl border border-blue-300/20 bg-blue-300/5 p-4"><h2 className="text-sm font-bold">Follower requests <span className="ml-1 text-blue-300">({requests.length})</span></h2><div className="mt-3 space-y-3">{requests.map(request => <div key={request.follower_id} className="flex flex-wrap items-center justify-between gap-3"><div><strong className="block text-xs">{request.display_name}</strong><span className="text-[10px] text-slate-500">@{request.username}</span></div><div className="flex gap-2"><button type="button" onClick={() => void handleRequest(request.follower_id, false)} className="rounded-lg border border-white/10 px-3 py-2 text-[10px] text-slate-300">Decline</button><button type="button" onClick={() => void handleRequest(request.follower_id, true)} className="rounded-lg bg-blue-600 px-3 py-2 text-[10px] font-bold text-white">Approve</button></div></div>)}</div></section>}<form onSubmit={save} className="mt-8 space-y-5">
             <div className="rounded-xl bg-black/20 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Signed in as</p><p className="mt-1 text-sm text-slate-200">{email}</p></div>
             <label className="block text-xs font-semibold text-slate-300">Display name<input required value={profile.display_name} onChange={event => setProfile(current => ({ ...current, display_name: event.target.value }))} maxLength={80} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b111c] px-4 py-3 text-sm outline-none focus:border-blue-400" /></label>
             <label className="block text-xs font-semibold text-slate-300">Username<input required value={profile.username} onChange={event => setProfile(current => ({ ...current, username: event.target.value }))} minLength={3} maxLength={30} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b111c] px-4 py-3 text-sm outline-none focus:border-blue-400" /><span className="mt-1 block text-[10px] text-slate-500">Your public SmartTag handle.</span></label>
