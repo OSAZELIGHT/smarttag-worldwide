@@ -41,7 +41,7 @@ The initial SQL migration defines profiles, follows, posts, media, comments, rea
 - [x] Add local demo interactions for publishing, appreciating and following.
 - [x] Add a browser capture studio with photo/video recording and local downloads.
 - [x] Document the product direction and first data model.
-- [ ] Connect authentication and persistent profiles.
+- [x] Add Supabase email sign-up/sign-in UI and an auth-user profile creation trigger (requires Supabase project configuration).\n- [ ] Add server-enforced authenticated route protection and persistent profile editing.
 
 ### Stage 2 — working social foundation
 - Registration, login, email verification and password recovery.
