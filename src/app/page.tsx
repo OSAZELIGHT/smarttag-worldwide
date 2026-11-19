@@ -160,7 +160,6 @@ export default function SmartTagHome() {
       setReportingPostId(null);
       return;
     }
-    const post = posts.find(item => item.id === reportingPostId);
     const { error } = await supabase.from("content_reports").insert({
       reporter_id: authData.user.id,
       post_id: reportingPostId,
@@ -172,7 +171,6 @@ export default function SmartTagHome() {
     setReportingPostId(null);
     setReportDetails("");
     setReporting(false);
-    void post;
   }
 
   async function toggleSave(postId: string | number) {
