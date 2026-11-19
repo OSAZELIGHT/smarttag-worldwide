@@ -253,7 +253,7 @@ create policy post_media_read on public.post_media for select to authenticated u
 create policy post_media_insert on public.post_media for insert to authenticated with check (owner_id=auth.uid() and (storage.foldername(storage_path))[1]=auth.uid()::text and exists(select 1 from public.posts p where p.id=post_id and p.author_id=auth.uid()));
 create policy media_assets_read on public.media_assets for select to authenticated using (owner_id=auth.uid());
 create policy media_assets_insert on public.media_assets for insert to authenticated with check (owner_id=auth.uid() and (storage.foldername(storage_path))[1]=auth.uid()::text);
-create policy media_assets_update on public.media_assets for update to authenticated using (owner_id=auth.uid()) with check (owner_id=auth.uid());
+create policy media_assets_update on public.media_assets for update to authenticated using (owner_id=auth.uid()) with check (owner_id=auth.uid() and (storage.foldername(storage_path))[1]=auth.uid()::text);
 create policy media_assets_delete on public.media_assets for delete to authenticated using (owner_id=auth.uid());
 create policy comments_read on public.comments for select to authenticated using (deleted_at is null and exists(select 1 from public.posts p where p.id=post_id and p.deleted_at is null));
 create policy comments_insert on public.comments for insert to authenticated with check (author_id=auth.uid() and exists(select 1 from public.posts p where p.id=post_id and p.comments_enabled and p.deleted_at is null));
