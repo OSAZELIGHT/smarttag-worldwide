@@ -14,7 +14,7 @@ For a new, empty project, open the SQL Editor and run:
 
 The migration creates:
 - Profiles and the Auth user profile-creation trigger.
-- Posts, media metadata, comments and reactions.
+- Posts, media metadata, comments, reactions and saved posts.
 - Follows with pending requests for private profiles.
 - User blocks and visibility-aware read policies.
 - Stories, communities, conversations, messages, notifications, hashtags and reports.
