@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import CameraForge from "@/components/CameraForge";
 
 type Post = { id: number; name: string; handle: string; time: string; initials: string; color: string; text: string; tags: string[]; image?: string; likes: number; comments: number; kind: "photo" | "video" | "text" };
@@ -38,7 +39,7 @@ export default function SmartTagHome() {
       <header className="st-topbar">
         <a className="st-brand" href="#" onClick={() => setActive("Home")}><span className="brand-mark">S</span><span>smart<span>tag</span></span></a>
         <label className="st-search"><span>⌕</span><input placeholder="Search people, posts, topics..." aria-label="Search SmartTag" /><kbd>⌘ K</kbd></label>
-        <div className="top-actions"><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("Notifications will appear here when your account is connected.")}>♧<i /></button><button className="icon-button" aria-label="Messages" onClick={() => setActive("Messages")}>✉</button><a className="mini-avatar blue grid place-items-center no-underline" href="/auth" aria-label="Sign in or create an account">YO</a></div>
+        <div className="top-actions"><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("Notifications will appear here when your account is connected.")}>♧<i /></button><button className="icon-button" aria-label="Messages" onClick={() => setActive("Messages")}>✉</button><Link className="mini-avatar blue grid place-items-center no-underline" href="/auth" aria-label="Sign in or create an account">YO</Link></div>
       </header>
       <div className="st-layout">
         <aside className="left-sidebar">
