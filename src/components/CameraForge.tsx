@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+
+type CaptureKind = "image" | "video";
+type PendingCapture = { blob: Blob; kind: CaptureKind; fileName: string };
 
 export default function CameraForge() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -10,6 +14,10 @@ export default function CameraForge() {
   const [cameraOn, setCameraOn] = useState(false);
   const [recording, setRecording] = useState(false);
   const [message, setMessage] = useState("");
+  const [pending, setPending] = useState<PendingCapture | null>(null);
+  const [title, setTitle] = useState("");
+  const [tags, setTags] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => () => {
     const recorder = recorderRef.current;
@@ -50,13 +58,9 @@ export default function CameraForge() {
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     canvas.toBlob(blob => {
       if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `smarttag-capture-${Date.now()}.jpg`;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setMessage("Photo captured. It was downloaded to this device; cloud vault upload is not connected yet.");
+      setPending({ blob, kind: "image", fileName: `smarttag-photo-${Date.now()}.jpg` });
+      setTitle("My SmartTag photo");
+      setMessage("Photo captured. Add a title or tags, then save it to your Smart Vault or download it.");
     }, "image/jpeg", 0.92);
   }
 
@@ -67,18 +71,16 @@ export default function CameraForge() {
       return;
     }
     chunksRef.current = [];
-    const recorder = new MediaRecorder(stream);
+    const preferred = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"].find(type => MediaRecorder.isTypeSupported(type));
+    const recorder = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream);
     recorderRef.current = recorder;
     recorder.ondataavailable = event => { if (event.data.size) chunksRef.current.push(event.data); };
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "video/webm" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `smarttag-video-${Date.now()}.webm`;
-      link.click();
-      URL.revokeObjectURL(url);
-      setMessage("Video recording downloaded to this device. Cloud publishing is not connected yet.");
+      const extension = blob.type.includes("mp4") ? "mp4" : "webm";
+      setPending({ blob, kind: "video", fileName: `smarttag-video-${Date.now()}.${extension}` });
+      setTitle("My SmartTag video");
+      setMessage("Video ready. Add a title or tags, then save it to your Smart Vault or download it.");
     };
     recorder.start();
     setRecording(true);
@@ -86,12 +88,69 @@ export default function CameraForge() {
   }
 
   function stopCamera() {
-    if (recording) recorderRef.current?.stop();
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     streamRef.current?.getTracks().forEach(track => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraOn(false);
     setRecording(false);
+  }
+
+  function downloadCapture() {
+    if (!pending) return;
+    const url = URL.createObjectURL(pending.blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = pending.fileName;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  async function saveToVault() {
+    if (!pending || saving) return;
+    if (!isSupabaseConfigured || !supabase) {
+      setMessage("Smart Vault needs your Supabase project configured. You can download this capture for now.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        setMessage("Sign in to save captures to your private Smart Vault.");
+        return;
+      }
+      const extension = pending.fileName.split(".").pop() || (pending.kind === "image" ? "jpg" : "webm");
+      const storagePath = `${authData.user.id}/${crypto.randomUUID()}.${extension}`;
+      const file = new File([pending.blob], pending.fileName, { type: pending.blob.type });
+      const { error: uploadError } = await supabase.storage.from("user-media").upload(storagePath, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+      if (uploadError) throw uploadError;
+      const { error: recordError } = await supabase.from("media_assets").insert({
+        owner_id: authData.user.id,
+        storage_path: storagePath,
+        kind: pending.kind,
+        file_name: pending.fileName,
+        mime_type: file.type || (pending.kind === "image" ? "image/jpeg" : "video/webm"),
+        byte_size: file.size,
+        title: title.trim(),
+        tags: tags.split(",").map(tag => tag.trim().replace(/^#/, "").toLowerCase()).filter(Boolean).slice(0, 20),
+      });
+      if (recordError) {
+        await supabase.storage.from("user-media").remove([storagePath]);
+        throw recordError;
+      }
+      setMessage("Saved successfully to your private Smart Vault.");
+      setPending(null);
+      setTitle("");
+      setTags("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The capture could not be saved. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -110,7 +169,13 @@ export default function CameraForge() {
           <button onClick={stopCamera} className="ml-auto rounded-xl border border-white/10 px-4 py-3 text-xs text-slate-300">Turn off</button>
         </>}
       </div>
-      <p className="mt-4 text-[10px] leading-5 text-slate-500">Capture works locally in your browser. Files are downloaded to your device; account-based cloud storage and publishing will be connected in a later backend phase.</p>
+      {pending && <div className="mt-4 rounded-2xl border border-white/10 bg-white/[.03] p-3">
+        <div className="mb-3 flex items-center justify-between"><strong className="text-xs text-white">Capture ready · {pending.kind}</strong><button onClick={() => setPending(null)} className="text-xs text-slate-400">Discard</button></div>
+        <label className="mb-3 block text-[10px] text-slate-400">Title<input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} placeholder="Give this capture a name" className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-blue-400" /></label>
+        <label className="mb-3 block text-[10px] text-slate-400">Tags (comma-separated)<input value={tags} onChange={event => setTags(event.target.value)} maxLength={300} placeholder="family, travel, project" className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-blue-400" /></label>
+        <div className="flex flex-wrap gap-2"><button onClick={downloadCapture} className="rounded-lg border border-white/15 px-4 py-2.5 text-xs text-slate-200">Download</button><button onClick={() => void saveToVault()} disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save to Smart Vault"}</button></div>
+      </div>}
+      <p className="mt-4 text-[10px] leading-5 text-slate-500">Your camera capture stays on this device until you choose to save it. Smart Vault uploads are private to your account.</p>
     </section>
   );
 }
