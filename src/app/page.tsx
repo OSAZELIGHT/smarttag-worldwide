@@ -7,7 +7,7 @@ import CameraForge from "@/components/CameraForge";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type CommentItem = { id: string | number; author: string; body: string; time: string };
-type Post = { id: string | number; authorId?: string; name: string; handle: string; time: string; initials: string; color: string; text: string; tags: string[]; image?: string; likes: number; comments: number; kind: "photo" | "video" | "text" };
+type Post = { id: string | number; authorId?: string; name: string; handle: string; time: string; initials: string; color: string; text: string; tags: string[]; image?: string; video?: string; likes: number; comments: number; kind: "photo" | "video" | "text" };
 
 const starterPosts: Post[] = [
   { id: 1, name: "Amara Okafor", handle: "@amara.creates", time: "12 min ago", initials: "AO", color: "coral", text: "A little reminder to keep creating, keep learning and keep showing up. Your next chapter can start with one small step. ✨", tags: ["CreatorLife", "MondayMotivation"], image: "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=1200&q=85", likes: 248, comments: 32, kind: "photo" },
@@ -37,6 +37,7 @@ export default function SmartTagHome() {
   const [commentsByPost, setCommentsByPost] = useState<Record<string, CommentItem[]>>({});
   const [following, setFollowing] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showComposer, setShowComposer] = useState(false);
   const [showStudio, setShowStudio] = useState(false);
   const [notice, setNotice] = useState("");
@@ -52,23 +53,30 @@ export default function SmartTagHome() {
       if (error || !rows?.length || !active) return;
       const authorIds = [...new Set(rows.map(row => row.author_id))];
       const postIds = rows.map(row => row.id);
-      const [{ data: profiles }, { data: reactions }, { data: mine }, { data: commentRows }] = await Promise.all([
+      const [{ data: profiles }, { data: reactions }, { data: mine }, { data: commentRows }, { data: mediaRows }] = await Promise.all([
         supabase!.from("profiles").select("id, username, display_name").in("id", authorIds),
         supabase!.from("post_reactions").select("post_id").in("post_id", postIds),
         supabase!.from("post_reactions").select("post_id").eq("user_id", authData.user.id).in("post_id", postIds),
         supabase!.from("comments").select("post_id").in("post_id", postIds),
+        supabase!.from("post_media").select("post_id, storage_path, kind").in("post_id", postIds),
       ]);
       if (!active) return;
       const profileMap = new Map((profiles ?? []).map(profile => [profile.id, profile]));
       const counts = new Map<string, number>();
       const mineIds = new Set((mine ?? []).map(reaction => reaction.post_id));
+      const mediaMap = new Map<string, { url: string; kind: "image" | "video" }>();
+      await Promise.all((mediaRows ?? []).map(async media => {
+        const { data: signed } = await supabase!.storage.from("user-media").createSignedUrl(media.storage_path, 3600);
+        if (signed?.signedUrl) mediaMap.set(media.post_id, { url: signed.signedUrl, kind: media.kind === "video" ? "video" : "image" });
+      }));
       const commentCounts = new Map<string, number>();
       (commentRows ?? []).forEach(comment => commentCounts.set(comment.post_id, (commentCounts.get(comment.post_id) ?? 0) + 1));
       (reactions ?? []).forEach(reaction => counts.set(reaction.post_id, (counts.get(reaction.post_id) ?? 0) + 1));
       setPosts(rows.map(row => {
         const profile = profileMap.get(row.author_id);
         const displayName = profile?.display_name ?? "SmartTag member";
-        return { id: row.id, authorId: row.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: timeAgo(row.created_at), initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: row.body, tags: [], likes: Math.max(0, (counts.get(row.id) ?? 0) - (mineIds.has(row.id) ? 1 : 0)), comments: commentCounts.get(row.id) ?? 0, kind: "text" as const };
+        const media = mediaMap.get(row.id);
+        return { id: row.id, authorId: row.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: timeAgo(row.created_at), initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: row.body, tags: [], image: media?.kind === "image" ? media.url : undefined, video: media?.kind === "video" ? media.url : undefined, likes: Math.max(0, (counts.get(row.id) ?? 0) - (mineIds.has(row.id) ? 1 : 0)), comments: commentCounts.get(row.id) ?? 0, kind: media?.kind === "video" ? "video" as const : media?.kind === "image" ? "photo" as const : "text" as const };
       }));
       setLiked((mine ?? []).map(reaction => reaction.post_id));
     }
@@ -78,24 +86,59 @@ export default function SmartTagHome() {
 
   async function publish() {
     const body = draft.trim();
-    if (!body || publishing) return;
+    if ((!body && !selectedFile) || publishing) return;
+    if (selectedFile && (selectedFile.size > 524288000 || !["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/webm"].includes(selectedFile.type))) {
+      setNotice("Choose a JPG, PNG, WEBP, GIF, MP4 or WEBM file up to 500 MB.");
+      return;
+    }
     setPublishing(true);
     try {
       let newPost: Post = { id: Date.now(), name: "You", handle: "@yourprofile", time: "Just now", initials: "YO", color: "blue", text: body, tags: ["NewPost"], likes: 0, comments: 0, kind: "text" };
       let message = "Your post has been added to this demo feed.";
+      if (selectedFile && (!isSupabaseConfigured || !supabase)) {
+        setNotice("Sign in and connect Supabase before publishing photos or videos.");
+        return;
+      }
       if (isSupabaseConfigured && supabase) {
         const { data: authData } = await supabase.auth.getUser();
         if (authData.user) {
-          const { data, error } = await supabase.from("posts").insert({ author_id: authData.user.id, body, visibility: "public" }).select("id, body, created_at, author_id").single();
-          if (error) throw error;
-          const { data: profile } = await supabase.from("profiles").select("username, display_name").eq("id", authData.user.id).single();
-          const displayName = profile?.display_name ?? "You";
-          newPost = { id: data.id, authorId: data.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: "Just now", initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: data.body, tags: [], likes: 0, comments: 0, kind: "text" };
-          message = "Your post has been published to SmartTag.";
+          let uploadedPath: string | null = null;
+          try {
+            if (selectedFile) {
+              const extension = selectedFile.name.split(".").pop()?.toLowerCase() || (selectedFile.type.startsWith("video/") ? "webm" : "jpg");
+              uploadedPath = authData.user.id + "/" + crypto.randomUUID() + "." + extension;
+              const { error: uploadError } = await supabase.storage.from("user-media").upload(uploadedPath, selectedFile, { contentType: selectedFile.type, upsert: false });
+              if (uploadError) throw uploadError;
+            }
+            const { data, error } = await supabase.from("posts").insert({ author_id: authData.user.id, body, visibility: "public" }).select("id, body, created_at, author_id").single();
+            if (error) throw error;
+            let mediaUrl: string | undefined;
+            if (selectedFile && uploadedPath) {
+              const mediaKind = selectedFile.type.startsWith("video/") ? "video" : "image";
+              const { error: mediaError } = await supabase.from("post_media").insert({ post_id: data.id, owner_id: authData.user.id, storage_path: uploadedPath, kind: mediaKind, mime_type: selectedFile.type, byte_size: selectedFile.size, alt_text: selectedFile.name });
+              if (mediaError) {
+                await supabase.from("posts").delete().eq("id", data.id);
+                throw mediaError;
+              }
+              const { data: signed } = await supabase.storage.from("user-media").createSignedUrl(uploadedPath, 3600);
+              mediaUrl = signed?.signedUrl;
+            }
+            const { data: profile } = await supabase.from("profiles").select("username, display_name").eq("id", authData.user.id).single();
+            const displayName = profile?.display_name ?? "You";
+            const isVideo = selectedFile?.type.startsWith("video/") ?? false;
+            newPost = { id: data.id, authorId: data.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: "Just now", initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: data.body, tags: [], image: selectedFile && !isVideo ? mediaUrl : undefined, video: selectedFile && isVideo ? mediaUrl : undefined, likes: 0, comments: 0, kind: isVideo ? "video" : selectedFile ? "photo" : "text" };
+            message = "Your post has been published to SmartTag.";
+          } catch (error) {
+            if (uploadedPath) await supabase.storage.from("user-media").remove([uploadedPath]);
+            throw error;
+          }
+        } else if (selectedFile) {
+          setNotice("Sign in to publish photos and videos to SmartTag.");
+          return;
         }
       }
       setPosts(current => [newPost, ...current]);
-      setDraft(""); setShowComposer(false); setNotice(message);
+      setDraft(""); setSelectedFile(null); setShowComposer(false); setNotice(message);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Your post could not be published. Please try again.");
     } finally {
@@ -171,7 +214,7 @@ export default function SmartTagHome() {
           <section className="composer-card"><div className="avatar blue">YO</div><button className="composer-prompt" onClick={() => setShowComposer(true)}>Share something with your community...</button><button className="composer-tool photo-tool" onClick={() => setNotice("Photo uploads will be connected to Smart Vault.")}>▧ <span>Photo</span></button><button className="composer-tool video-tool" onClick={() => setNotice("Video uploads and short videos are on the product roadmap.")}>▷ <span>Video</span></button></section>
           <div className="feed-heading"><div><h2>Your feed</h2><p>Ideas, moments and conversations</p></div><div className="feed-filters">{["For you", "Following", "Photos", "Videos"].map(f => <button key={f} className={filter === f ? "filter active-filter" : "filter"} onClick={() => setFilter(f)}>{f}</button>)}</div></div>
           {visiblePosts.length === 0 && <div className="empty-state">No {filter.toLowerCase()} in this demo feed yet.</div>}
-          {visiblePosts.map(post => <article className="post-card" key={post.id}><div className="post-header"><div className={"avatar " + post.color}>{post.initials}</div><div className="post-author"><strong>{post.name} <span className="verified">✓</span></strong><span>{post.handle} · {post.time}</span></div><button className="more-button" aria-label="More post options" onClick={() => setNotice("More post options will be available on published posts.")}>•••</button></div><p className="post-copy">{post.text}</p><div className="tag-row">{post.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>{post.image && <div className="post-image-wrap"><Image src={post.image} alt="Community post visual" width={1200} height={800} unoptimized className="post-image" /></div>}<div className="post-stats"><span>{post.likes + (liked.includes(post.id) ? 1 : 0)} appreciations</span><span>{post.comments} comments · Share</span></div><div className="post-actions"><button className={liked.includes(post.id) ? "post-action is-liked" : "post-action"} onClick={() => void toggleLike(post.id)}><span>♡</span> Appreciate</button><button className="post-action" onClick={() => void openComments(post.id)}><span>▢</span> Comment</button><button className="post-action" onClick={() => setNotice("Sharing will be enabled for published posts.")}><span>↗</span> Share</button><button className="post-action save-action" onClick={() => setNotice("Saved items will be available in your personal library.")}><span>▱</span></button></div>{commentingPostId === post.id && <div className="comment-thread"><div className="comment-list">{(commentsByPost[String(post.id)] ?? []).map(comment => <div className="comment-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p><small>{comment.time}</small></div>)}{(commentsByPost[String(post.id)] ?? []).length === 0 && <p className="no-comments">Start the conversation with a thoughtful comment.</p>}</div><form className="comment-form" onSubmit={event => { event.preventDefault(); void addComment(post.id); }}><input value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Write a comment..." maxLength={2000} aria-label="Write a comment" /><button type="submit" disabled={!commentDraft.trim()}>Send</button></form></div>}</article>)}
+          {visiblePosts.map(post => <article className="post-card" key={post.id}><div className="post-header"><div className={"avatar " + post.color}>{post.initials}</div><div className="post-author"><strong>{post.name} <span className="verified">✓</span></strong><span>{post.handle} · {post.time}</span></div><button className="more-button" aria-label="More post options" onClick={() => setNotice("More post options will be available on published posts.")}>•••</button></div><p className="post-copy">{post.text}</p><div className="tag-row">{post.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>{post.image && <div className="post-image-wrap"><Image src={post.image} alt="Community post visual" width={1200} height={800} unoptimized className="post-image" /></div>}{post.video && <div className="post-image-wrap"><video src={post.video} controls playsInline className="post-image" /></div>}<div className="post-stats"><span>{post.likes + (liked.includes(post.id) ? 1 : 0)} appreciations</span><span>{post.comments} comments · Share</span></div><div className="post-actions"><button className={liked.includes(post.id) ? "post-action is-liked" : "post-action"} onClick={() => void toggleLike(post.id)}><span>♡</span> Appreciate</button><button className="post-action" onClick={() => void openComments(post.id)}><span>▢</span> Comment</button><button className="post-action" onClick={() => setNotice("Sharing will be enabled for published posts.")}><span>↗</span> Share</button><button className="post-action save-action" onClick={() => setNotice("Saved items will be available in your personal library.")}><span>▱</span></button></div>{commentingPostId === post.id && <div className="comment-thread"><div className="comment-list">{(commentsByPost[String(post.id)] ?? []).map(comment => <div className="comment-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p><small>{comment.time}</small></div>)}{(commentsByPost[String(post.id)] ?? []).length === 0 && <p className="no-comments">Start the conversation with a thoughtful comment.</p>}</div><form className="comment-form" onSubmit={event => { event.preventDefault(); void addComment(post.id); }}><input value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Write a comment..." maxLength={2000} aria-label="Write a comment" /><button type="submit" disabled={!commentDraft.trim()}>Send</button></form></div>}</article>)}
           <div className="feed-end"><span>✦</span><p>You&apos;re all caught up for now.</p><small>More from your world is on the way.</small></div>
         </section>
         <aside className="right-sidebar">
@@ -181,7 +224,7 @@ export default function SmartTagHome() {
           <div className="right-footer">Made for people, powered by community.<br/><strong>SMARTTAG</strong> · GC Smart Technology</div>
         </aside>
       </div>
-      {showComposer && <div className="modal-backdrop" onClick={() => setShowComposer(false)}><section className="composer-modal" onClick={e => e.stopPropagation()}><div className="modal-heading"><div><span className="eyebrow">CREATE SOMETHING</span><h2>Share with your world</h2></div><button onClick={() => setShowComposer(false)}>×</button></div><div className="modal-user"><div className="avatar blue">YO</div><div><strong>Your profile</strong><span>Sharing with your community</span></div></div><textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} placeholder="What's happening in your world?" /><div className="modal-tools"><span>＋ Add to your story</span><span>▧ Photo / video</span><span># Add tags</span></div><button className="publish-button" disabled={!draft.trim() || publishing} onClick={() => void publish()}>{publishing ? "Publishing…" : "Publish post"} <span>→</span></button><p className="demo-note">Demo mode: posts are only stored in this page session.</p></section></div>}
+      {showComposer && <div className="modal-backdrop" onClick={() => setShowComposer(false)}><section className="composer-modal" onClick={e => e.stopPropagation()}><div className="modal-heading"><div><span className="eyebrow">CREATE SOMETHING</span><h2>Share with your world</h2></div><button onClick={() => setShowComposer(false)}>×</button></div><div className="modal-user"><div className="avatar blue">YO</div><div><strong>Your profile</strong><span>Sharing with your community</span></div></div><textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} placeholder="What's happening in your world?" /><div className="modal-tools"><label className="cursor-pointer">▧ Add photo/video<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" className="sr-only" onChange={event => { const file = event.target.files?.[0]; if (file) setSelectedFile(file); event.target.value = ""; }} /></label><span># Add tags</span></div>{selectedFile && <div className="mb-3 flex items-center justify-between rounded-lg bg-white/5 p-3 text-[10px] text-slate-300"><span className="truncate">{selectedFile.name} · {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB</span><button onClick={() => setSelectedFile(null)} className="ml-3 text-rose-300">Remove</button></div>}<button className="publish-button" disabled={(!draft.trim() && !selectedFile) || publishing} onClick={() => void publish()}>{publishing ? "Publishing…" : "Publish post"} <span>→</span></button><p className="demo-note">Text-only demo posts stay in this page session. Signed-in photo and video posts are saved to SmartTag.</p></section></div>}
       <nav className="mobile-nav">{navItems.map(item => item.label === "Explore" ? <Link key={item.label} href="/people" className=""><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Saved" ? <Link key={item.label} href="/vault" className=""><span>{item.icon}</span><small>{item.label}</small></Link> : <button key={item.label} className={active === item.label ? "mobile-active" : ""} onClick={() => setActive(item.label)}><span>{item.icon}</span><small>{item.label}</small></button>)}</nav>
     </main>
   );
