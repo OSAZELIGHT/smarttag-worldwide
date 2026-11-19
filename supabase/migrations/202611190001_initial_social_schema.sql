@@ -232,10 +232,25 @@ create policy "Members delete own stories" on public.stories for delete to authe
 create policy "Viewers record their own story views" on public.story_views for insert to authenticated with check (viewer_id = auth.uid());
 create policy "Story owners see views and viewers see own views" on public.story_views for select to authenticated using (viewer_id = auth.uid() or exists (select 1 from public.stories s where s.id = story_id and s.author_id = auth.uid()));
 
-create policy "Public communities are discoverable" on public.communities for select to authenticated using (not is_private or owner_id = auth.uid() or exists (select 1 from public.community_members m where m.community_id = id and m.user_id = auth.uid()));
+create or replace function public.is_community_member(target_community_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select exists (
+    select 1 from public.community_members m
+    where m.community_id = target_community_id and m.user_id = auth.uid()
+  );
+$;
+revoke all on function public.is_community_member(uuid) from public;
+grant execute on function public.is_community_member(uuid) to authenticated;
+
+create policy "Public communities are discoverable" on public.communities for select to authenticated using (not is_private or owner_id = auth.uid() or public.is_community_member(id));
 create policy "Members create communities" on public.communities for insert to authenticated with check (owner_id = auth.uid());
 create policy "Community owners update communities" on public.communities for update to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
-create policy "Members see memberships in discoverable communities" on public.community_members for select to authenticated using (user_id = auth.uid() or exists (select 1 from public.communities c where c.id = community_id and not c.is_private) or exists (select 1 from public.communities c where c.id = community_id and c.owner_id = auth.uid()));
+create policy "Members see memberships in discoverable communities" on public.community_members for select to authenticated using (user_id = auth.uid() or public.is_community_member(community_id) or exists (select 1 from public.communities c where c.id = community_id and not c.is_private));
 create policy "Members join as themselves" on public.community_members for insert to authenticated with check (user_id = auth.uid());
 create policy "Members leave themselves" on public.community_members for delete to authenticated using (user_id = auth.uid());
 
