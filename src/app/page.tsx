@@ -152,7 +152,7 @@ export default function SmartTagHome() {
       <header className="st-topbar">
         <a className="st-brand" href="#" onClick={() => setActive("Home")}><span className="brand-mark">S</span><span>smart<span>tag</span></span></a>
         <label className="st-search"><span>⌕</span><input placeholder="Search people, posts, topics..." aria-label="Search SmartTag" /><kbd>⌘ K</kbd></label>
-        <div className="top-actions"><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("Notifications will appear here when your account is connected.")}>♧<i /></button><button className="icon-button" aria-label="Messages" onClick={() => setActive("Messages")}>✉</button><Link href="/vault" className="icon-button grid place-items-center no-underline" aria-label="Open Smart Vault">▧</Link><Link className="mini-avatar blue grid place-items-center no-underline" href="/auth" aria-label="Sign in or create an account">YO</Link></div>
+        <div className="top-actions"><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("Notifications will appear here when your account is connected.")}>♧<i /></button><button className="icon-button" aria-label="Messages" onClick={() => setActive("Messages")}>✉</button><Link href="/vault" className="icon-button grid place-items-center no-underline" aria-label="Open Smart Vault">▧</Link><Link className="mini-avatar blue grid place-items-center no-underline" href="/profile" aria-label="Open your profile settings">YO</Link></div>
       </header>
       <div className="st-layout">
         <aside className="left-sidebar">
