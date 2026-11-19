@@ -162,6 +162,48 @@ export default function CameraForge() {
     }
   }
 
+  async function publishStory() {
+    if (!pending || saving || !isSupabaseConfigured || !supabase) {
+      setMessage("Connect Supabase and sign in to publish a story.");
+      return;
+    }
+    if (pending.blob.size > 104857600) {
+      setMessage("Stories have a 100 MB upload limit.");
+      return;
+    }
+    setSaving(true);
+    setMessage("");
+    let storagePath: string | null = null;
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) {
+        setMessage("Sign in to publish a story.");
+        return;
+      }
+      const extension = pending.fileName.split(".").pop()?.toLowerCase() || (pending.kind === "image" ? "jpg" : "webm");
+      storagePath = authData.user.id + "/" + crypto.randomUUID() + "." + extension;
+      const file = new File([pending.blob], pending.fileName, { type: pending.blob.type.split(";")[0] });
+      const { error: uploadError } = await supabase.storage.from("story-media").upload(storagePath, file, { contentType: file.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { error: storyError } = await supabase.from("stories").insert({
+        author_id: authData.user.id,
+        media_path: storagePath,
+        media_kind: pending.kind,
+        caption: title.trim().slice(0, 500),
+      });
+      if (storyError) throw storyError;
+      setPending(null);
+      setTitle("");
+      setTags("");
+      setMessage("Your story is live for 24 hours.");
+    } catch (error) {
+      if (storagePath) await supabase.storage.from("story-media").remove([storagePath]);
+      setMessage(error instanceof Error ? error.message : "Your story could not be published.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <section className="w-full max-w-xl rounded-3xl border border-blue-400/20 bg-slate-950/80 p-4 text-left shadow-2xl">
       <div className="mb-4 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-[.2em] text-blue-300">SMARTTAG STUDIO</p><h2 className="mt-1 text-xl font-bold">Capture a moment</h2></div><span className="rounded-full border border-white/10 px-3 py-1 text-[10px] text-slate-400">{cameraOn ? "CAMERA ON" : "CAMERA OFF"}</span></div>
@@ -182,7 +224,7 @@ export default function CameraForge() {
         <div className="mb-3 flex items-center justify-between"><strong className="text-xs text-white">Capture ready · {pending.kind}</strong><button onClick={() => setPending(null)} className="text-xs text-slate-400">Discard</button></div>
         <label className="mb-3 block text-[10px] text-slate-400">Title<input value={title} onChange={event => setTitle(event.target.value)} maxLength={120} placeholder="Give this capture a name" className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-blue-400" /></label>
         <label className="mb-3 block text-[10px] text-slate-400">Tags (comma-separated)<input value={tags} onChange={event => setTags(event.target.value)} maxLength={300} placeholder="family, travel, project" className="mt-1 w-full rounded-lg border border-white/10 bg-slate-900 px-3 py-2 text-xs text-white outline-none focus:border-blue-400" /></label>
-        <div className="flex flex-wrap gap-2"><button onClick={downloadCapture} className="rounded-lg border border-white/15 px-4 py-2.5 text-xs text-slate-200">Download</button><button onClick={() => void saveToVault()} disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save to Smart Vault"}</button></div>
+        <div className="flex flex-wrap gap-2"><button onClick={downloadCapture} className="rounded-lg border border-white/15 px-4 py-2.5 text-xs text-slate-200">Download</button><button onClick={() => void saveToVault()} disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save to Smart Vault"}</button><button onClick={() => void publishStory()} disabled={saving} className="rounded-lg border border-violet-300/30 px-4 py-2.5 text-xs font-bold text-violet-200 disabled:opacity-50">Share as Story</button></div>
       </div>}
       <p className="mt-4 text-[10px] leading-5 text-slate-500">Your camera capture stays on this device until you choose to save it. Smart Vault uploads are private to your account.</p>
     </section>
