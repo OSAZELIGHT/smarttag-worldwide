@@ -83,7 +83,8 @@ export default function SmartTagHome() {
         const media = mediaMap.get(row.id);
         return { id: row.id, authorId: row.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: timeAgo(row.created_at), initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: row.body, tags: [], image: media?.kind === "image" ? media.url : undefined, video: media?.kind === "video" ? media.url : undefined, likes: Math.max(0, (counts.get(row.id) ?? 0) - (mineIds.has(row.id) ? 1 : 0)), comments: commentCounts.get(row.id) ?? 0, kind: media?.kind === "video" ? "video" as const : media?.kind === "image" ? "photo" as const : "text" as const };
       }));
-      setLiked((mine ?? []).map(reaction => reaction.post_id));\n      setFollowingIds((followRows ?? []).map(row => row.following_id));
+      setLiked((mine ?? []).map(reaction => reaction.post_id));
+      setFollowingIds((followRows ?? []).map(row => row.following_id));
       setSavedIds((savedRows ?? []).map(row => row.post_id));
     }
     void loadSocialFeed();
