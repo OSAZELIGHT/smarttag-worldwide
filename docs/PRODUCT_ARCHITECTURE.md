@@ -41,7 +41,10 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 - [x] Add local demo interactions for publishing, appreciating and following.
 - [x] Add a browser capture studio with photo/video recording, local downloads and authenticated private-vault upload.
 - [x] Document the product direction and initial Supabase schema, RLS and private storage buckets.
-- [x] Add Supabase email sign-up/sign-in UI and an auth-user profile creation trigger (requires Supabase project configuration).\n- [ ] Add server-enforced authenticated route protection and persistent profile editing.
+- [x] Add Supabase email sign-up/sign-in UI and an auth-user profile creation trigger (requires Supabase project configuration).
+- [x] Add profile editing, privacy settings, and private-account follow request approval.
+- [x] Add member discovery and follow/unfollow actions.
+- [ ] Add server-enforced authenticated route protection.
 
 ### Stage 2 — working social foundation
 - Registration, login, email verification and password recovery.
