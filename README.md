@@ -45,7 +45,7 @@ The intended production architecture uses Supabase for authentication, relationa
 
 ## Current development status
 
-The social experience is being built in stages. The current branch introduces a responsive social-platform home, local demo interactions, browser camera capture, a Supabase email sign-up/sign-in screen, and an initial database migration. The feed is still demo content; posts, reactions and follows are not yet persisted. Stories, messaging, community membership, discovery and cloud media uploads still require implementation.
+The social experience is being built in stages. The current branch includes a responsive social home, Supabase email sign-up/sign-in, a first database and storage migration, persistent text posts/comments/reactions for authenticated users, a browser Capture Studio, and a private Smart Vault with media uploads, tags, signed previews and deletion. Demo feed examples and social discovery surfaces are still illustrative. Stories, messaging, communities, profile editing and production administration remain in development.
 
 Before public launch, the project still needs:
 1. Supabase project configuration and environment variables.
@@ -67,7 +67,7 @@ npm run dev
 
 Open http://localhost:3000.
 
-Copy `.env.example` to `.env.local` and add your Supabase project URL and public anon/publishable key. Apply the reviewed SQL migration in `supabase/migrations/` to your Supabase project before enabling real accounts. Never commit secret service-role keys. Only a public anon/publishable key may be exposed to browser code, and it must be protected by database and storage policies.
+Copy `.env.example` to `.env.local` and add your Supabase project URL and public anon/publishable key. Review and apply `supabase/migrations/202611190001_initial_social_schema.sql` to a fresh Supabase project before testing account creation or vault uploads. This schema has not yet been applied to a connected project in this workspace. Never commit secret service-role keys. Only a public anon/publishable key may be exposed to browser code, and it must be protected by database and storage policies.
 
 ## Project ownership
 
