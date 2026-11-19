@@ -108,6 +108,14 @@ export default function CameraForge() {
 
   async function saveToVault() {
     if (!pending || saving) return;
+    if (pending.blob.size > 524288000) {
+      setMessage("This file is larger than the 500 MB Smart Vault upload limit.");
+      return;
+    }
+    if (!pending.blob.type || !["image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4", "video/webm"].includes(pending.blob.type)) {
+      setMessage("This file type is not supported. Choose a JPG, PNG, WEBP, GIF, MP4 or WEBM file.");
+      return;
+    }
     if (!isSupabaseConfigured || !supabase) {
       setMessage("Smart Vault needs your Supabase project configured. You can download this capture for now.");
       return;
