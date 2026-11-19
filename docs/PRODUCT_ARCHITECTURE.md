@@ -43,7 +43,9 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 - [x] Document the product direction and initial Supabase schema, RLS and private storage buckets.
 - [x] Add Supabase email sign-up/sign-in UI and an auth-user profile creation trigger (requires Supabase project configuration).
 - [x] Add profile editing, privacy settings, and private-account follow request approval.
-- [x] Add member discovery and follow/unfollow actions.
+- [x] Add member discovery, follow/unfollow and private follow-request approval.
+- [x] Add photo/video post uploads and a private Smart Vault media library.
+- [x] Add a basic one-to-one messaging inbox with private conversation membership.
 - [ ] Add server-enforced authenticated route protection.
 
 ### Stage 2 — working social foundation
@@ -60,9 +62,9 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 - Creator pages, saved posts, hashtags and search.
 
 ### Stage 4 — communications
-- Direct and group messaging.
-- Realtime delivery, unread counts, read receipts and notifications.
-- Safe media sharing and conversation controls.
+- [x] Basic one-to-one text messaging and conversation membership.
+- Group messaging, realtime delivery, unread counts, read receipts and notifications.
+- Safe media sharing, conversation controls and abuse-report workflows.
 
 ### Stage 5 — SmartTag differentiation
 - SmartTag metadata and manual tagging.
@@ -78,7 +80,7 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 
 ## Current prototype limitations
 
-The home feed includes demo examples and can load public posts for signed-in users. Authenticated users can publish text posts, react to persisted posts and comment; demo-only sample posts remain local. The capture studio can record photos/videos, download them locally, and upload them with a title and tags to the private Smart Vault when Supabase is configured and the migration is applied. The Vault supports signed previews, tag/search filtering and deletion. Stories, messaging, search, communities, trends and suggested people remain prototype experiences.
+The home feed includes demo examples and can load visible posts for signed-in users. Authenticated users can publish text and photo/video posts, react and comment; demo-only sample posts remain local. Member discovery supports follow/unfollow and private-profile requests. Profile settings support editing and request approval. The capture studio can record photos/videos, accept device uploads, download locally, and upload captures with a title and tags to the private Smart Vault. The Vault supports signed previews, tag/search filtering and deletion. Basic one-to-one text messaging is implemented; realtime delivery, group messaging, stories, communities, trending search, saved posts and production moderation remain unfinished.
 
 ## Required environment
 
