@@ -214,7 +214,7 @@ alter table public.hashtags enable row level security;
 alter table public.post_hashtags enable row level security;
 alter table public.content_reports enable row level security;
 
-create policy "Profiles are visible to signed-in members" on public.profiles for select to authenticated using (true);
+create policy "Profiles respect privacy settings" on public.profiles for select to authenticated using (not is_private or id = auth.uid() or exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = id));
 create policy "Members create their own profile" on public.profiles for insert to authenticated with check (id = auth.uid());
 create policy "Members update their own profile" on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
@@ -239,7 +239,7 @@ create policy "Reactions visible to signed-in members" on public.post_reactions 
 create policy "Members react as themselves" on public.post_reactions for insert to authenticated with check (user_id = auth.uid());
 create policy "Members remove own reactions" on public.post_reactions for delete to authenticated using (user_id = auth.uid());
 
-create policy "Active stories are visible to signed-in members" on public.stories for select to authenticated using (expires_at > now());
+create policy "Active stories respect profile privacy" on public.stories for select to authenticated using (expires_at > now() and (author_id = auth.uid() or exists (select 1 from public.profiles p where p.id = author_id and not p.is_private) or exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = author_id)));
 create policy "Members publish their own stories" on public.stories for insert to authenticated with check (author_id = auth.uid());
 create policy "Members delete own stories" on public.stories for delete to authenticated using (author_id = auth.uid());
 create policy "Viewers record their own story views" on public.story_views for insert to authenticated with check (viewer_id = auth.uid());
@@ -293,7 +293,7 @@ create policy "Senders edit their own messages" on public.messages for update to
 create policy "Recipients read their notifications" on public.notifications for select to authenticated using (recipient_id = auth.uid());
 create policy "Recipients update their notifications" on public.notifications for update to authenticated using (recipient_id = auth.uid()) with check (recipient_id = auth.uid());
 create policy "Signed-in members can read hashtags" on public.hashtags for select to authenticated using (true);
-create policy "Signed-in members can read post hashtags" on public.post_hashtags for select to authenticated using (true);
+create policy "Post hashtags follow post visibility" on public.post_hashtags for select to authenticated using (exists (select 1 from public.posts p where p.id = post_id and p.deleted_at is null and (p.visibility = 'public' or p.author_id = auth.uid() or (p.visibility = 'followers' and exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = p.author_id)))));
 create policy "Post authors attach hashtags" on public.post_hashtags for insert to authenticated with check (exists (select 1 from public.posts p where p.id = post_id and p.author_id = auth.uid()));
 create policy "Members submit reports as themselves" on public.content_reports for insert to authenticated with check (reporter_id = auth.uid());
 create policy "Reporters see their own reports" on public.content_reports for select to authenticated using (reporter_id = auth.uid());
