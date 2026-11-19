@@ -609,3 +609,79 @@ create policy "Reporters see their own reports" on public.content_reports for se
 -- Storage setup is intentionally not automated here. Create private buckets for
 -- user-media and message-media, then add object policies that validate the first
 -- path segment equals auth.uid(). Do not make private uploads publicly readable.
+
+
+-- Private storage buckets. Objects are stored under {auth.uid()}/{file-id}.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values
+  ('user-media', 'user-media', false, 524288000, array['image/jpeg','image/png','image/webp','image/gif','video/mp4','video/webm']),
+  ('story-media', 'story-media', false, 104857600, array['image/jpeg','image/png','image/webp','video/mp4','video/webm']),
+  ('message-media', 'message-media', false, 52428800, array['image/jpeg','image/png','image/webp','video/mp4','video/webm'])
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+create policy "Users upload their own social media" on storage.objects
+for insert to authenticated
+with check (bucket_id = 'user-media' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "Users read own media or media on readable posts" on storage.objects
+for select to authenticated
+using (
+  bucket_id = 'user-media'
+  and (
+    (storage.foldername(name))[1] = auth.uid()::text
+    or exists (
+      select 1 from public.post_media pm
+      join public.posts p on p.id = pm.post_id
+      where pm.storage_path = name and p.deleted_at is null
+    )
+  )
+);
+
+create policy "Users update their own social media" on storage.objects
+for update to authenticated
+using (bucket_id = 'user-media' and (storage.foldername(name))[1] = auth.uid()::text)
+with check (bucket_id = 'user-media' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "Users delete their own social media" on storage.objects
+for delete to authenticated
+using (bucket_id = 'user-media' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "Users upload their own stories" on storage.objects
+for insert to authenticated
+with check (bucket_id = 'story-media' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "Users read stories they are allowed to view" on storage.objects
+for select to authenticated
+using (
+  bucket_id = 'story-media'
+  and (
+    (storage.foldername(name))[1] = auth.uid()::text
+    or exists (select 1 from public.stories s where s.media_path = name and s.expires_at > now())
+  )
+);
+
+create policy "Users delete their own stories" on storage.objects
+for delete to authenticated
+using (bucket_id = 'story-media' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "Conversation members upload message media" on storage.objects
+for insert to authenticated
+with check (bucket_id = 'message-media' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "Conversation members read message media" on storage.objects
+for select to authenticated
+using (
+  bucket_id = 'message-media'
+  and (
+    (storage.foldername(name))[1] = auth.uid()::text
+    or exists (select 1 from public.messages m where m.media_path = name and m.deleted_at is null)
+  )
+);
+
+create policy "Owners delete their own message media" on storage.objects
+for delete to authenticated
+using (bucket_id = 'message-media' and (storage.foldername(name))[1] = auth.uid()::text);
+
