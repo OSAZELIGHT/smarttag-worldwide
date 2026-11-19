@@ -41,6 +41,7 @@ export default function PeopleDirectory() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { const initial = new URLSearchParams(window.location.search).get("q"); if (initial) setQuery(initial); }, []);
 
   const filtered = useMemo(() => people.filter(person =>
     [person.display_name, person.username, person.bio].join(" ").toLowerCase().includes(query.toLowerCase())
