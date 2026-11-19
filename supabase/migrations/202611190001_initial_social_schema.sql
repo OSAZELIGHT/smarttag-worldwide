@@ -42,6 +42,14 @@ begin
   check (follower_id <> following_id)
 );
 
+create table public.user_blocks (
+  blocker_id uuid not null references public.profiles(id) on delete cascade,
+  blocked_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, blocked_id),
+  check (blocker_id <> blocked_id)
+);
+
 create table public.posts (
   id uuid primary key default gen_random_uuid(),
   author_id uuid not null references public.profiles(id) on delete cascade,
@@ -198,6 +206,7 @@ create index community_members_user_idx on public.community_members(user_id);
 -- first pass; expand visibility rules only with explicit product requirements.
 alter table public.profiles enable row level security;
 alter table public.follows enable row level security;
+alter table public.user_blocks enable row level security;
 alter table public.posts enable row level security;
 alter table public.post_media enable row level security;
 alter table public.comments enable row level security;
@@ -214,15 +223,18 @@ alter table public.hashtags enable row level security;
 alter table public.post_hashtags enable row level security;
 alter table public.content_reports enable row level security;
 
-create policy "Profiles respect privacy settings" on public.profiles for select to authenticated using (not is_private or id = auth.uid() or exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = id));
+create policy "Profiles respect privacy and blocks" on public.profiles for select to authenticated using ((not is_private or id = auth.uid() or exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = id)) and not exists (select 1 from public.user_blocks b where (b.blocker_id = auth.uid() and b.blocked_id = id) or (b.blocker_id = id and b.blocked_id = auth.uid())));
 create policy "Members create their own profile" on public.profiles for insert to authenticated with check (id = auth.uid());
 create policy "Members update their own profile" on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
-create policy "Follow relationships are visible to members" on public.follows for select to authenticated using (true);
-create policy "Members follow from their own account" on public.follows for insert to authenticated with check (follower_id = auth.uid());
+create policy "Follow relationships exclude blocked accounts" on public.follows for select to authenticated using (not exists (select 1 from public.user_blocks b where (b.blocker_id = auth.uid() and b.blocked_id in (follower_id, following_id)) or (b.blocked_id = auth.uid() and b.blocker_id in (follower_id, following_id))));
+create policy "Members follow from their own account" on public.follows for insert to authenticated with check (follower_id = auth.uid() and not exists (select 1 from public.user_blocks b where (b.blocker_id = follower_id and b.blocked_id = following_id) or (b.blocker_id = following_id and b.blocked_id = follower_id)));
 create policy "Members unfollow from their own account" on public.follows for delete to authenticated using (follower_id = auth.uid());
+create policy "Members see blocks they created" on public.user_blocks for select to authenticated using (blocker_id = auth.uid());
+create policy "Members block from their own account" on public.user_blocks for insert to authenticated with check (blocker_id = auth.uid());
+create policy "Members unblock from their own account" on public.user_blocks for delete to authenticated using (blocker_id = auth.uid());
 
-create policy "Public posts and own posts are readable" on public.posts for select to authenticated using (deleted_at is null and (visibility = 'public' or author_id = auth.uid() or (visibility = 'followers' and exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = author_id))));
+create policy "Public posts and own posts are readable" on public.posts for select to authenticated using (deleted_at is null and not exists (select 1 from public.user_blocks b where (b.blocker_id = auth.uid() and b.blocked_id = author_id) or (b.blocker_id = author_id and b.blocked_id = auth.uid())) and (visibility = 'public' or author_id = auth.uid() or (visibility = 'followers' and exists (select 1 from public.follows f where f.follower_id = auth.uid() and f.following_id = author_id))));
 create policy "Members create posts as themselves" on public.posts for insert to authenticated with check (author_id = auth.uid());
 create policy "Authors update their own posts" on public.posts for update to authenticated using (author_id = auth.uid()) with check (author_id = auth.uid());
 create policy "Authors delete their own posts" on public.posts for delete to authenticated using (author_id = auth.uid());
