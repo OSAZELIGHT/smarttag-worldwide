@@ -16,6 +16,7 @@
 - 24-hour stories, story viewer and video/Reels discovery.
 - Community creation, public joining and private community shells.
 - Post reporting and database report intake.
+- Notifications generated for follows, reactions, comments and messages, with a read-state inbox.
 - Initial PostgreSQL schema, row-level security and private Storage bucket policies.
 - CI workflow, Dependabot configuration, setup guide and release checklist.
 
