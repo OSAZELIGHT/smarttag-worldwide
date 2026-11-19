@@ -6,6 +6,7 @@ import Link from "next/link";
 import CameraForge from "@/components/CameraForge";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
+type CommentItem = { id: string | number; author: string; body: string; time: string };
 type Post = { id: string | number; authorId?: string; name: string; handle: string; time: string; initials: string; color: string; text: string; tags: string[]; image?: string; likes: number; comments: number; kind: "photo" | "video" | "text" };
 
 const starterPosts: Post[] = [
@@ -31,6 +32,9 @@ export default function SmartTagHome() {
   const [posts, setPosts] = useState(starterPosts);
   const [liked, setLiked] = useState<Array<string | number>>([]);
   const [publishing, setPublishing] = useState(false);
+  const [commentingPostId, setCommentingPostId] = useState<string | number | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
+  const [commentsByPost, setCommentsByPost] = useState<Record<string, CommentItem[]>>({});
   const [following, setFollowing] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [showComposer, setShowComposer] = useState(false);
@@ -96,6 +100,35 @@ export default function SmartTagHome() {
     }
   }
 
+  async function openComments(postId: string | number) {
+    if (commentingPostId === postId) { setCommentingPostId(null); return; }
+    setCommentingPostId(postId);
+    if (typeof postId !== "string" || !isSupabaseConfigured || !supabase) return;
+    const { data, error } = await supabase.from("comments").select("id, body, created_at, author_id").eq("post_id", postId).is("deleted_at", null).order("created_at", { ascending: true }).limit(50);
+    if (error) { setNotice(error.message); return; }
+    const authorIds = [...new Set((data ?? []).map(row => row.author_id))];
+    const { data: profiles } = authorIds.length ? await supabase.from("profiles").select("id, display_name").in("id", authorIds) : { data: [] };
+    const profileMap = new Map((profiles ?? []).map(profile => [profile.id, profile.display_name]));
+    setCommentsByPost(current => ({ ...current, [String(postId)]: (data ?? []).map(row => ({ id: row.id, author: profileMap.get(row.author_id) ?? "SmartTag member", body: row.body, time: timeAgo(row.created_at) })) }));
+  }
+
+  async function addComment(postId: string | number) {
+    const body = commentDraft.trim();
+    if (!body) return;
+    let item: CommentItem = { id: Date.now(), author: "You", body, time: "Just now" };
+    if (typeof postId === "string" && isSupabaseConfigured && supabase) {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) { setNotice("Sign in to comment on SmartTag posts."); return; }
+      const { data, error } = await supabase.from("comments").insert({ post_id: postId, author_id: authData.user.id, body }).select("id, body, created_at").single();
+      if (error) { setNotice(error.message); return; }
+      const { data: profile } = await supabase.from("profiles").select("display_name").eq("id", authData.user.id).single();
+      item = { id: data.id, author: profile?.display_name ?? "You", body: data.body, time: "Just now" };
+    }
+    setCommentsByPost(current => ({ ...current, [String(postId)]: [...(current[String(postId)] ?? []), item] }));
+    setPosts(current => current.map(post => post.id === postId ? { ...post, comments: post.comments + 1 } : post));
+    setCommentDraft("");
+  }
+
   async function toggleLike(postId: string | number) {
     const alreadyLiked = liked.includes(postId);
     const post = posts.find(item => item.id === postId);
@@ -135,7 +168,7 @@ export default function SmartTagHome() {
           <section className="composer-card"><div className="avatar blue">YO</div><button className="composer-prompt" onClick={() => setShowComposer(true)}>Share something with your community...</button><button className="composer-tool photo-tool" onClick={() => setNotice("Photo uploads will be connected to Smart Vault.")}>▧ <span>Photo</span></button><button className="composer-tool video-tool" onClick={() => setNotice("Video uploads and short videos are on the product roadmap.")}>▷ <span>Video</span></button></section>
           <div className="feed-heading"><div><h2>Your feed</h2><p>Ideas, moments and conversations</p></div><div className="feed-filters">{["For you", "Following", "Photos", "Videos"].map(f => <button key={f} className={filter === f ? "filter active-filter" : "filter"} onClick={() => setFilter(f)}>{f}</button>)}</div></div>
           {visiblePosts.length === 0 && <div className="empty-state">No {filter.toLowerCase()} in this demo feed yet.</div>}
-          {visiblePosts.map(post => <article className="post-card" key={post.id}><div className="post-header"><div className={"avatar " + post.color}>{post.initials}</div><div className="post-author"><strong>{post.name} <span className="verified">✓</span></strong><span>{post.handle} · {post.time}</span></div><button className="more-button" aria-label="More post options" onClick={() => setNotice("More post options will be available on published posts.")}>•••</button></div><p className="post-copy">{post.text}</p><div className="tag-row">{post.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>{post.image && <div className="post-image-wrap"><Image src={post.image} alt="Community post visual" width={1200} height={800} unoptimized className="post-image" /></div>}<div className="post-stats"><span>{post.likes + (liked.includes(post.id) ? 1 : 0)} appreciations</span><span>{post.comments} comments · Share</span></div><div className="post-actions"><button className={liked.includes(post.id) ? "post-action is-liked" : "post-action"} onClick={() => void toggleLike(post.id)}><span>♡</span> Appreciate</button><button className="post-action" onClick={() => setNotice("Comments will be enabled when the social backend is connected.")}><span>▢</span> Comment</button><button className="post-action" onClick={() => setNotice("Sharing will be enabled for published posts.")}><span>↗</span> Share</button><button className="post-action save-action" onClick={() => setNotice("Saved items will be available in your personal library.")}><span>▱</span></button></div></article>)}
+          {visiblePosts.map(post => <article className="post-card" key={post.id}><div className="post-header"><div className={"avatar " + post.color}>{post.initials}</div><div className="post-author"><strong>{post.name} <span className="verified">✓</span></strong><span>{post.handle} · {post.time}</span></div><button className="more-button" aria-label="More post options" onClick={() => setNotice("More post options will be available on published posts.")}>•••</button></div><p className="post-copy">{post.text}</p><div className="tag-row">{post.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>{post.image && <div className="post-image-wrap"><Image src={post.image} alt="Community post visual" width={1200} height={800} unoptimized className="post-image" /></div>}<div className="post-stats"><span>{post.likes + (liked.includes(post.id) ? 1 : 0)} appreciations</span><span>{post.comments} comments · Share</span></div><div className="post-actions"><button className={liked.includes(post.id) ? "post-action is-liked" : "post-action"} onClick={() => void toggleLike(post.id)}><span>♡</span> Appreciate</button><button className="post-action" onClick={() => void openComments(post.id)}><span>▢</span> Comment</button><button className="post-action" onClick={() => setNotice("Sharing will be enabled for published posts.")}><span>↗</span> Share</button><button className="post-action save-action" onClick={() => setNotice("Saved items will be available in your personal library.")}><span>▱</span></button></div>{commentingPostId === post.id && <div className="comment-thread"><div className="comment-list">{(commentsByPost[String(post.id)] ?? []).map(comment => <div className="comment-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p><small>{comment.time}</small></div>)}{(commentsByPost[String(post.id)] ?? []).length === 0 && <p className="no-comments">Start the conversation with a thoughtful comment.</p>}</div><form className="comment-form" onSubmit={event => { event.preventDefault(); void addComment(post.id); }}><input value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Write a comment..." maxLength={2000} aria-label="Write a comment" /><button type="submit" disabled={!commentDraft.trim()}>Send</button></form></div>}</article>)}
           <div className="feed-end"><span>✦</span><p>You&apos;re all caught up for now.</p><small>More from your world is on the way.</small></div>
         </section>
         <aside className="right-sidebar">
