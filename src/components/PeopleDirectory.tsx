@@ -73,6 +73,58 @@ export default function PeopleDirectory() {
     setBusyId(null);
   }
 
+  async function startConversation(person: Person) {
+    if (!supabase || messageBusyId) return;
+    setMessageBusyId(person.id);
+    setMessage("");
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      setMessage("Sign in to message SmartTag members.");
+      setMessageBusyId(null);
+      return;
+    }
+    const { data: ownMemberships, error: ownError } = await supabase.from("conversation_members")
+      .select("conversation_id")
+      .eq("user_id", authData.user.id);
+    if (ownError) {
+      setMessage(ownError.message);
+      setMessageBusyId(null);
+      return;
+    }
+    const ids = (ownMemberships ?? []).map(row => row.conversation_id);
+    let conversationId = "";
+    if (ids.length) {
+      const { data: otherMemberships } = await supabase.from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", person.id)
+        .in("conversation_id", ids);
+      conversationId = otherMemberships?.[0]?.conversation_id ?? "";
+    }
+    if (!conversationId) {
+      const { data: created, error: createError } = await supabase.from("conversations")
+        .insert({ created_by: authData.user.id, is_group: false })
+        .select("id")
+        .single();
+      if (createError || !created) {
+        setMessage(createError?.message ?? "Could not start this conversation.");
+        setMessageBusyId(null);
+        return;
+      }
+      conversationId = created.id;
+      const { error: memberError } = await supabase.from("conversation_members").insert([
+        { conversation_id: conversationId, user_id: authData.user.id },
+        { conversation_id: conversationId, user_id: person.id },
+      ]);
+      if (memberError) {
+        setMessage(memberError.message);
+        setMessageBusyId(null);
+        return;
+      }
+    }
+    router.push("/messages?conversation=" + encodeURIComponent(conversationId));
+    setMessageBusyId(null);
+  }
+
   return (
     <main className="min-h-screen bg-[#090b12] px-4 py-9 text-white sm:px-8">
       <div className="mx-auto max-w-5xl">
