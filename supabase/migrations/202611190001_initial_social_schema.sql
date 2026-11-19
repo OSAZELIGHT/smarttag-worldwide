@@ -43,6 +43,7 @@ create trigger on_auth_user_created after insert on auth.users for each row exec
 create table public.follows (
   follower_id uuid not null references public.profiles(id) on delete cascade,
   following_id uuid not null references public.profiles(id) on delete cascade,
+  status text not null default 'accepted' check(status in ('pending','accepted')),
   created_at timestamptz not null default now(),
   primary key(follower_id,following_id), check(follower_id <> following_id)
 );
@@ -188,6 +189,27 @@ $function$;
 revoke all on function public.is_blocked_with(uuid) from public;
 grant execute on function public.is_blocked_with(uuid) to authenticated;
 
+create or replace function public.profile_is_private(target_user_id uuid)
+returns boolean language sql stable security definer set search_path = public, pg_temp
+as $function$
+  select coalesce((select p.is_private from public.profiles p where p.id=target_user_id), true);
+$function$;
+revoke all on function public.profile_is_private(uuid) from public;
+grant execute on function public.profile_is_private(uuid) to authenticated;
+
+create or replace function public.accept_follow_request(target_follower_id uuid)
+returns boolean language plpgsql security definer set search_path = public, pg_temp
+as $function$
+begin
+  update public.follows
+  set status='accepted'
+  where follower_id=target_follower_id and following_id=auth.uid() and status='pending';
+  return found;
+end;
+$function$;
+revoke all on function public.accept_follow_request(uuid) from public;
+grant execute on function public.accept_follow_request(uuid) to authenticated;
+
 create or replace function public.is_conversation_member(target_id uuid)
 returns boolean language sql stable security definer set search_path = public, pg_temp
 as $function$ select exists(select 1 from public.conversation_members m where m.conversation_id=target_id and m.user_id=auth.uid()); $function$;
@@ -214,16 +236,16 @@ alter table public.hashtags enable row level security;
 alter table public.post_hashtags enable row level security;
 alter table public.content_reports enable row level security;
 
-create policy profiles_read on public.profiles for select to authenticated using ((not is_private or id=auth.uid() or exists(select 1 from public.follows f where f.follower_id=auth.uid() and f.following_id=id)) and not public.is_blocked_with(id));
+create policy profiles_read on public.profiles for select to authenticated using (not public.is_blocked_with(id));
 create policy profiles_insert on public.profiles for insert to authenticated with check (id=auth.uid());
 create policy profiles_update on public.profiles for update to authenticated using (id=auth.uid()) with check (id=auth.uid());
-create policy follows_read on public.follows for select to authenticated using (not public.is_blocked_with(follower_id) and not public.is_blocked_with(following_id));
-create policy follows_insert on public.follows for insert to authenticated with check (follower_id=auth.uid() and not public.is_blocked_with(following_id));
-create policy follows_delete on public.follows for delete to authenticated using (follower_id=auth.uid());
+create policy follows_read on public.follows for select to authenticated using ((follower_id=auth.uid() or following_id=auth.uid() or status='accepted') and not public.is_blocked_with(follower_id) and not public.is_blocked_with(following_id));
+create policy follows_insert on public.follows for insert to authenticated with check (follower_id=auth.uid() and not public.is_blocked_with(following_id) and status=case when public.profile_is_private(following_id) then 'pending' else 'accepted' end);
+create policy follows_delete on public.follows for delete to authenticated using (follower_id=auth.uid() or following_id=auth.uid());
 create policy blocks_read on public.user_blocks for select to authenticated using (blocker_id=auth.uid());
 create policy blocks_insert on public.user_blocks for insert to authenticated with check (blocker_id=auth.uid());
 create policy blocks_delete on public.user_blocks for delete to authenticated using (blocker_id=auth.uid());
-create policy posts_read on public.posts for select to authenticated using (deleted_at is null and not public.is_blocked_with(author_id) and (author_id=auth.uid() or (visibility in ('public','followers') and exists(select 1 from public.profiles pr where pr.id=author_id and (not pr.is_private or exists(select 1 from public.follows f where f.follower_id=auth.uid() and f.following_id=author_id)))) and (visibility='public' or exists(select 1 from public.follows f where f.follower_id=auth.uid() and f.following_id=author_id)));
+create policy posts_read on public.posts for select to authenticated using (deleted_at is null and not public.is_blocked_with(author_id) and (author_id=auth.uid() or (visibility in ('public','followers') and exists(select 1 from public.profiles pr where pr.id=author_id and (not pr.is_private or exists(select 1 from public.follows f where f.follower_id=auth.uid() and f.following_id=author_id and f.status='accepted' and f.status='accepted' and f.status='accepted' and f.status='accepted')))) and (visibility='public' or exists(select 1 from public.follows f where f.follower_id=auth.uid() and f.following_id=author_id)));
 create policy posts_insert on public.posts for insert to authenticated with check (author_id=auth.uid());
 create policy posts_update on public.posts for update to authenticated using (author_id=auth.uid()) with check (author_id=auth.uid());
 create policy posts_delete on public.posts for delete to authenticated using (author_id=auth.uid());
