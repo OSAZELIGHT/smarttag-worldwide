@@ -1,11 +1,15 @@
-import './globals.css';
-import { Inter } from 'next/font/google';
-const inter = Inter({ subsets: ['latin'] });
-export const metadata = { title: 'Smarttag | Universal View', description: 'Engineered by GC Smart Technology' };
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "SmartTag Worldwide | Your world, your people",
+  description: "One connected social community for sharing moments, discovering people and building together. Powered by GC Smart Technology.",
+};
+
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="dark">
-      <body className="{inter.className} bg-black text-white antialiased">{children}</body>
+    <html lang="en">
+      <body>{children}</body>
     </html>
   );
 }
