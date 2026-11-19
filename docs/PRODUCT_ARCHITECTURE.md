@@ -56,8 +56,8 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 - Registration, login, email verification and password recovery.
 - Profile editing and privacy.
 - Persistent post creation, media upload, comments and reactions.
-- Follow requests/relationships and feed queries.
-- User blocking and reporting.
+- [x] Follow requests/relationships and feed queries.
+- [x] User blocking and post reporting with private report intake.
 
 ### Stage 3 — community and creator tools
 - Stories with expiry and audience controls.
