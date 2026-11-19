@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 type VaultAsset = {
@@ -94,13 +95,13 @@ export default function SmartVault() {
       <div className="mx-auto max-w-6xl">
         <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-6">
           <div><Link href="/" className="text-xs font-bold text-blue-300">← SMARTTAG HOME</Link><p className="mt-4 text-[10px] font-bold uppercase tracking-[.2em] text-blue-300">YOUR PRIVATE MEDIA LIBRARY</p><h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Smart Vault</h1><p className="mt-2 text-sm text-slate-400">Your captures, organized and stored under your account.</p></div>
-          <Link href="/?studio=1" className="rounded-xl bg-blue-600 px-4 py-3 text-xs font-bold text-white">Open Capture Studio ↗</Link>
+          <Link href="/studio" className="rounded-xl bg-blue-600 px-4 py-3 text-xs font-bold text-white">Open Capture Studio ↗</Link>
         </header>
         <div className="mt-7 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold">Your library</h2><p className="mt-1 text-xs text-slate-500">{assets.length} saved {assets.length === 1 ? "item" : "items"}</p></div><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search titles, file names and tags..." aria-label="Search Smart Vault" className="w-full max-w-sm rounded-xl border border-white/10 bg-[#121927] px-4 py-3 text-xs text-white outline-none focus:border-blue-400" /></div>
         {tags.length > 1 && <div className="mt-4 flex flex-wrap gap-2">{tags.map(tag => <button key={tag} onClick={() => setActiveTag(tag)} className={activeTag === tag ? "rounded-full bg-blue-600 px-3 py-2 text-[10px] font-bold text-white" : "rounded-full border border-white/10 px-3 py-2 text-[10px] text-slate-400"}>{tag === "All" ? tag : "#" + tag}</button>)}</div>}
         {message && <div role="status" className="mt-6 rounded-xl border border-blue-300/20 bg-blue-300/5 p-4 text-xs leading-6 text-blue-100">{message}{message.includes("Sign in") && <Link href="/auth" className="ml-2 font-bold underline">Sign in</Link>}</div>}
         {loading ? <p className="py-16 text-center text-sm text-slate-500">Loading your private library…</p> : filtered.length === 0 ? <div className="mt-8 rounded-2xl border border-dashed border-white/10 px-5 py-16 text-center"><span className="text-4xl text-slate-600">▧</span><h3 className="mt-4 text-sm font-bold">Your vault is ready for its first capture</h3><p className="mt-2 text-xs text-slate-500">Use SmartTag Studio to capture a photo or video and save it here.</p></div> : <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{filtered.map(asset => <article key={asset.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#121927]">
-          <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-black">{asset.signedUrl && asset.kind === "image" ? <img src={asset.signedUrl} alt={asset.title || asset.file_name} className="h-full w-full object-cover" /> : asset.signedUrl && asset.kind === "video" ? <video src={asset.signedUrl} controls playsInline className="h-full w-full object-contain" /> : <span className="text-4xl text-slate-600">▧</span>}</div>
+          <div className="flex aspect-[4/3] items-center justify-center overflow-hidden bg-black">{asset.signedUrl && asset.kind === "image" ? <Image src={asset.signedUrl} alt={asset.title || asset.file_name} width={900} height={675} unoptimized className="h-full w-full object-cover" /> : asset.signedUrl && asset.kind === "video" ? <video src={asset.signedUrl} controls playsInline className="h-full w-full object-contain" /> : <span className="text-4xl text-slate-600">▧</span>}</div>
           <div className="p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-bold">{asset.title || asset.file_name}</h3><p className="mt-1 truncate text-[10px] text-slate-500">{asset.file_name}</p></div><span className="rounded-md bg-blue-300/10 px-2 py-1 text-[9px] uppercase text-blue-200">{asset.kind}</span></div>
           <div className="mt-3 flex flex-wrap gap-1">{(asset.tags ?? []).map(tag => <span key={tag} className="rounded-full bg-white/5 px-2 py-1 text-[9px] text-blue-200">#{tag}</span>)}</div>
           <div className="mt-4 flex items-center justify-between text-[10px] text-slate-500"><span>{readableSize(asset.byte_size)}</span><span>{new Date(asset.created_at).toLocaleDateString()}</span></div>
