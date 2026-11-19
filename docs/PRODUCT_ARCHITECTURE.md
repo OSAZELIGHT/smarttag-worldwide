@@ -29,7 +29,7 @@ SmartTag is a broad social network and digital community, not a camera utility. 
 
 ## Data model in the first migration
 
-The initial SQL migration defines profiles, follows, posts, media, comments, reactions, stories and views, communities and memberships, conversations and messages, notifications, hashtags and reports. It enables RLS and provides conservative starting policies.
+The initial SQL migration defines profiles, follows, user blocking, posts, media, comments, reactions, stories and views, communities and memberships, conversations and messages, notifications, hashtags and reports. It enables RLS and provides conservative starting policies.
 
 **Important:** this migration is a foundation, not a completed security certification. Review it against the actual Supabase project, test every policy using separate user accounts, add automated policy tests, and implement storage policies before accepting real uploads. Private-profile story visibility, blocking, moderation audit history, rate limits, feed ranking and notification fan-out require further migrations.
 
