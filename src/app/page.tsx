@@ -152,14 +152,14 @@ export default function SmartTagHome() {
       <header className="st-topbar">
         <a className="st-brand" href="#" onClick={() => setActive("Home")}><span className="brand-mark">S</span><span>smart<span>tag</span></span></a>
         <label className="st-search"><span>⌕</span><input placeholder="Search people, posts, topics..." aria-label="Search SmartTag" /><kbd>⌘ K</kbd></label>
-        <div className="top-actions"><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("Notifications will appear here when your account is connected.")}>♧<i /></button><button className="icon-button" aria-label="Messages" onClick={() => setActive("Messages")}>✉</button><Link className="mini-avatar blue grid place-items-center no-underline" href="/auth" aria-label="Sign in or create an account">YO</Link></div>
+        <div className="top-actions"><button className="icon-button" aria-label="Notifications" onClick={() => setNotice("Notifications will appear here when your account is connected.")}>♧<i /></button><button className="icon-button" aria-label="Messages" onClick={() => setActive("Messages")}>✉</button><Link href="/vault" className="icon-button grid place-items-center no-underline" aria-label="Open Smart Vault">▧</Link><Link className="mini-avatar blue grid place-items-center no-underline" href="/auth" aria-label="Sign in or create an account">YO</Link></div>
       </header>
       <div className="st-layout">
         <aside className="left-sidebar">
           <div className="profile-mini"><div className="avatar blue">YO</div><div><strong>Your profile</strong><span>@yourprofile</span></div><span className="online-dot" /></div>
           <p className="side-label">YOUR SPACE</p>
           <nav className="main-nav">{navItems.map(item => <button key={item.label} className={active === item.label ? "nav-item selected" : "nav-item"} onClick={() => setActive(item.label)}><span className="nav-icon">{item.icon}</span>{item.label}{item.label === "Messages" && <b className="nav-count">3</b>}</button>)}</nav>
-          <button className="create-button" onClick={() => setShowComposer(true)}><span>＋</span> Create a post</button>
+          <button className="create-button" onClick={() => setShowComposer(true)}><span>＋</span> Create a post</button><Link className="vault-nav-link" href="/vault">▧ <span>My Smart Vault</span> →</Link>
           <div className="sidebar-bottom"><p className="side-label">YOUR COMMUNITIES</p><button className="community-link"><span className="community-dot amber">✦</span> Creators Circle <small>2.4k</small></button><button className="community-link"><span className="community-dot mint">⌘</span> Tech & Innovation <small>1.8k</small></button><button className="community-link"><span className="community-dot lilac">♫</span> Music Lounge <small>960</small></button><button className="see-all" onClick={() => setActive("Communities")}>Explore communities →</button></div>
           <div className="sidebar-footer">About · Privacy · Guidelines<br/>© 2026 SmartTag Worldwide</div>
         </aside>
