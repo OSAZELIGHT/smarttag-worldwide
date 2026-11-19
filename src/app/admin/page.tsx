@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
 export default function AdminControl() {
@@ -37,7 +38,7 @@ export default function AdminControl() {
         <p className="mt-2 text-sm text-slate-400">Platform administration and community safety.</p>
         <div className="mt-8 rounded-xl border border-blue-300/20 bg-blue-400/5 p-5 text-sm leading-7 text-slate-200" role="status">{status}</div>
         <p className="mt-5 text-xs leading-6 text-slate-500">Administrative data is intentionally not queried from this public page. Production administration must be enforced by server-side authorization and Supabase row-level security, not by hiding interface elements.</p>
-        <a className="mt-6 inline-block text-sm text-blue-300 hover:text-blue-200" href="/">← Return to SmartTag</a>
+        <Link className="mt-6 inline-block text-sm text-blue-300 hover:text-blue-200" href="/">← Return to SmartTag</Link>
       </section>
     </main>
   );
