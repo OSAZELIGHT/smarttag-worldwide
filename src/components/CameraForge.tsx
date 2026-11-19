@@ -130,7 +130,8 @@ export default function CameraForge() {
       }
       const extension = pending.fileName.split(".").pop() || (pending.kind === "image" ? "jpg" : "webm");
       const storagePath = `${authData.user.id}/${crypto.randomUUID()}.${extension}`;
-      const file = new File([pending.blob], pending.fileName, { type: pending.blob.type });
+      const normalizedMime = pending.blob.type.split(";")[0];
+      const file = new File([pending.blob], pending.fileName, { type: normalizedMime });
       const { error: uploadError } = await supabase.storage.from("user-media").upload(storagePath, file, {
         contentType: file.type,
         upsert: false,
@@ -141,7 +142,7 @@ export default function CameraForge() {
         storage_path: storagePath,
         kind: pending.kind,
         file_name: pending.fileName,
-        mime_type: file.type || (pending.kind === "image" ? "image/jpeg" : "video/webm"),
+        mime_type: file.type,
         byte_size: file.size,
         title: title.trim(),
         tags: tags.split(",").map(tag => tag.trim().replace(/^#/, "").toLowerCase()).filter(Boolean).slice(0, 20),
