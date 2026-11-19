@@ -229,7 +229,18 @@ grant execute on function public.is_conversation_creator(uuid) to authenticated;
 
 create or replace function public.is_conversation_member(target_id uuid)
 returns boolean language sql stable security definer set search_path = public, pg_temp
-as $function$ select exists(select 1 from public.conversation_members m where m.conversation_id=target_id and m.user_id=auth.uid()); $function$;
+as $function$
+  select exists(
+    select 1 from public.conversation_members mine
+    where mine.conversation_id=target_id and mine.user_id=auth.uid()
+  )
+  and not exists(
+    select 1 from public.conversation_members other_member
+    where other_member.conversation_id=target_id
+      and other_member.user_id <> auth.uid()
+      and public.is_blocked_with(other_member.user_id)
+  );
+$function$;
 revoke all on function public.is_conversation_member(uuid) from public;
 grant execute on function public.is_conversation_member(uuid) to authenticated;
 
