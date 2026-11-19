@@ -52,20 +52,23 @@ export default function SmartTagHome() {
       if (error || !rows?.length || !active) return;
       const authorIds = [...new Set(rows.map(row => row.author_id))];
       const postIds = rows.map(row => row.id);
-      const [{ data: profiles }, { data: reactions }, { data: mine }] = await Promise.all([
+      const [{ data: profiles }, { data: reactions }, { data: mine }, { data: commentRows }] = await Promise.all([
         supabase!.from("profiles").select("id, username, display_name").in("id", authorIds),
         supabase!.from("post_reactions").select("post_id").in("post_id", postIds),
         supabase!.from("post_reactions").select("post_id").eq("user_id", authData.user.id).in("post_id", postIds),
+        supabase!.from("comments").select("post_id").in("post_id", postIds),
       ]);
       if (!active) return;
       const profileMap = new Map((profiles ?? []).map(profile => [profile.id, profile]));
       const counts = new Map<string, number>();
       const mineIds = new Set((mine ?? []).map(reaction => reaction.post_id));
+      const commentCounts = new Map<string, number>();
+      (commentRows ?? []).forEach(comment => commentCounts.set(comment.post_id, (commentCounts.get(comment.post_id) ?? 0) + 1));
       (reactions ?? []).forEach(reaction => counts.set(reaction.post_id, (counts.get(reaction.post_id) ?? 0) + 1));
       setPosts(rows.map(row => {
         const profile = profileMap.get(row.author_id);
         const displayName = profile?.display_name ?? "SmartTag member";
-        return { id: row.id, authorId: row.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: timeAgo(row.created_at), initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: row.body, tags: [], likes: Math.max(0, (counts.get(row.id) ?? 0) - (mineIds.has(row.id) ? 1 : 0)), comments: 0, kind: "text" as const };
+        return { id: row.id, authorId: row.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: timeAgo(row.created_at), initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: row.body, tags: [], likes: Math.max(0, (counts.get(row.id) ?? 0) - (mineIds.has(row.id) ? 1 : 0)), comments: commentCounts.get(row.id) ?? 0, kind: "text" as const };
       }));
       setLiked((mine ?? []).map(reaction => reaction.post_id));
     }
