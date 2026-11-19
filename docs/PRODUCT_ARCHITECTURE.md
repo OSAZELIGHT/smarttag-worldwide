@@ -29,9 +29,9 @@ SmartTag is a broad social network and digital community, not a camera utility. 
 
 ## Data model in the first migration
 
-The initial SQL migration defines profiles, follows, user blocking, posts, media, comments, reactions, stories and views, communities and memberships, conversations and messages, notifications, hashtags and reports. It enables RLS and provides conservative starting policies.
+The initial SQL migration defines profiles, follows, user blocking, posts, media assets, comments, reactions, stories and views, communities and memberships, conversations and messages, notifications, hashtags and reports. It enables RLS, creates private storage buckets and provides starting storage policies.
 
-**Important:** this migration is a foundation, not a completed security certification. Review it against the actual Supabase project, test every policy using separate user accounts, add automated policy tests, and implement storage policies before accepting real uploads. Private-profile story visibility, blocking, moderation audit history, rate limits, feed ranking and notification fan-out require further migrations.
+**Important:** this migration is a foundation, not a completed security certification. Apply it only to a fresh Supabase project after review. Test every policy using separate user accounts and add automated policy tests before launch. Production moderation, audit history, rate limits, feed ranking and notification fan-out require further work.
 
 ## Delivery plan
 
@@ -39,8 +39,8 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 - [x] Replace the starter landing page with the SmartTag social home.
 - [x] Establish mobile/desktop navigation, feed, stories strip, post composer and suggested connections.
 - [x] Add local demo interactions for publishing, appreciating and following.
-- [x] Add a browser capture studio with photo/video recording and local downloads.
-- [x] Document the product direction and first data model.
+- [x] Add a browser capture studio with photo/video recording, local downloads and authenticated private-vault upload.
+- [x] Document the product direction and initial Supabase schema, RLS and private storage buckets.
 - [x] Add Supabase email sign-up/sign-in UI and an auth-user profile creation trigger (requires Supabase project configuration).\n- [ ] Add server-enforced authenticated route protection and persistent profile editing.
 
 ### Stage 2 — working social foundation
@@ -75,7 +75,7 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 
 ## Current prototype limitations
 
-The feed examples are demo data. Publishing, reactions and follow buttons currently update local page state only. The capture studio records in the browser and downloads files to the device; it does not upload to a cloud vault. Stories, messages, search, communities, trends and suggested people are visual placeholders. The navigation is a prototype shell, not yet a complete set of routed product areas.
+The home feed includes demo examples and can load public posts for signed-in users. Authenticated users can publish text posts, react to persisted posts and comment; demo-only sample posts remain local. The capture studio can record photos/videos, download them locally, and upload them with a title and tags to the private Smart Vault when Supabase is configured and the migration is applied. The Vault supports signed previews, tag/search filtering and deletion. Stories, messaging, search, communities, trends and suggested people remain prototype experiences.
 
 ## Required environment
 
