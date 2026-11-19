@@ -87,29 +87,29 @@ export default function SmartTagHome() {
       setSavedIds((savedRows ?? []).map(row => row.post_id));
     }
     void loadSocialFeed();
-    async function toggleSave(postId: string | number) {
-    const id = String(postId);
-    const alreadySaved = savedIds.includes(id);
-    if (typeof postId === "string" && isSupabaseConfigured && supabase) {
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) {
-        setNotice("Sign in to save posts to your collection.");
-        return;
-      }
-      const result = alreadySaved
-        ? await supabase.from("saved_posts").delete().eq("user_id", authData.user.id).eq("post_id", id)
-        : await supabase.from("saved_posts").insert({ user_id: authData.user.id, post_id: id });
-      if (result.error) {
-        setNotice(result.error.message);
-        return;
-      }
-    }
-    setSavedIds(current => alreadySaved ? current.filter(item => item !== id) : [...current, id]);
-    setNotice(alreadySaved ? "Removed from your saved posts." : "Added to your saved posts.");
-  }
-
   return () => { active = false; };
   }, []);
+
+  async function toggleSave(postId: string | number) {
+  const id = String(postId);
+  const alreadySaved = savedIds.includes(id);
+  if (typeof postId === "string" && isSupabaseConfigured && supabase) {
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      setNotice("Sign in to save posts to your collection.");
+      return;
+    }
+    const result = alreadySaved
+      ? await supabase.from("saved_posts").delete().eq("user_id", authData.user.id).eq("post_id", id)
+      : await supabase.from("saved_posts").insert({ user_id: authData.user.id, post_id: id });
+    if (result.error) {
+      setNotice(result.error.message);
+      return;
+    }
+  }
+  setSavedIds(current => alreadySaved ? current.filter(item => item !== id) : [...current, id]);
+  setNotice(alreadySaved ? "Removed from your saved posts." : "Added to your saved posts.");
+  }
 
   async function publish() {
     const body = draft.trim();
