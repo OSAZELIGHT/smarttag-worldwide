@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import CameraForge from "@/components/CameraForge";
@@ -36,6 +36,10 @@ export default function SmartTagHome() {
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [liveStories, setLiveStories] = useState<StoryItem[]>([]);
   const [activeStory, setActiveStory] = useState<StoryItem | null>(null);
+  const [reportingPostId, setReportingPostId] = useState<string | number | null>(null);
+  const [reportReason, setReportReason] = useState("spam");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reporting, setReporting] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [commentingPostId, setCommentingPostId] = useState<string | number | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
@@ -139,6 +143,36 @@ export default function SmartTagHome() {
       const { error } = await supabase.from("story_views").insert({ story_id: story.id, viewer_id: authData.user.id });
       if (error && error.code !== "23505") setNotice(error.message);
     }
+  }
+
+  async function submitReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (typeof reportingPostId !== "string" || !supabase || reporting) {
+      setNotice("Reports can be submitted on published SmartTag posts after signing in.");
+      setReportingPostId(null);
+      return;
+    }
+    setReporting(true);
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) {
+      setNotice("Sign in to report a post.");
+      setReporting(false);
+      setReportingPostId(null);
+      return;
+    }
+    const post = posts.find(item => item.id === reportingPostId);
+    const { error } = await supabase.from("content_reports").insert({
+      reporter_id: authData.user.id,
+      post_id: reportingPostId,
+      reason: reportReason,
+      details: reportDetails.trim(),
+    });
+    if (error) setNotice(error.message);
+    else setNotice("Thank you. Your report has been submitted for review.");
+    setReportingPostId(null);
+    setReportDetails("");
+    setReporting(false);
+    void post;
   }
 
   async function toggleSave(postId: string | number) {
@@ -292,7 +326,7 @@ export default function SmartTagHome() {
           <section className="composer-card"><div className="avatar blue">YO</div><button className="composer-prompt" onClick={() => setShowComposer(true)}>Share something with your community...</button><button className="composer-tool photo-tool" onClick={() => setNotice("Photo uploads will be connected to Smart Vault.")}>▧ <span>Photo</span></button><button className="composer-tool video-tool" onClick={() => setNotice("Video uploads and short videos are on the product roadmap.")}>▷ <span>Video</span></button></section>
           <div className="feed-heading"><div><h2>Your feed</h2><p>Ideas, moments and conversations</p></div><div className="feed-filters">{["For you", "Following", "Photos", "Videos"].map(f => <button key={f} className={filter === f ? "filter active-filter" : "filter"} onClick={() => setFilter(f)}>{f}</button>)}</div></div>
           {visiblePosts.length === 0 && <div className="empty-state">No {filter.toLowerCase()} in this demo feed yet.</div>}
-          {visiblePosts.map(post => <article className="post-card" key={post.id}><div className="post-header"><div className={"avatar " + post.color}>{post.initials}</div><div className="post-author"><strong>{post.name} <span className="verified">✓</span></strong><span>{post.handle} · {post.time}</span></div><button className="more-button" aria-label="More post options" onClick={() => setNotice("More post options will be available on published posts.")}>•••</button></div><p className="post-copy">{post.text}</p><div className="tag-row">{post.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>{post.image && <div className="post-image-wrap"><Image src={post.image} alt="Community post visual" width={1200} height={800} unoptimized className="post-image" /></div>}{post.video && <div className="post-image-wrap"><video src={post.video} controls playsInline className="post-image" /></div>}<div className="post-stats"><span>{post.likes + (liked.includes(post.id) ? 1 : 0)} appreciations</span><span>{post.comments} comments · Share</span></div><div className="post-actions"><button className={liked.includes(post.id) ? "post-action is-liked" : "post-action"} onClick={() => void toggleLike(post.id)}><span>♡</span> Appreciate</button><button className="post-action" onClick={() => void openComments(post.id)}><span>▢</span> Comment</button><button className="post-action" onClick={() => setNotice("Sharing will be enabled for published posts.")}><span>↗</span> Share</button><button className={savedIds.includes(String(post.id)) ? "post-action save-action is-saved" : "post-action save-action"} aria-label={savedIds.includes(String(post.id)) ? "Remove saved post" : "Save post"} onClick={() => void toggleSave(post.id)}><span>{savedIds.includes(String(post.id)) ? "▣" : "▱"}</span></button></div>{commentingPostId === post.id && <div className="comment-thread"><div className="comment-list">{(commentsByPost[String(post.id)] ?? []).map(comment => <div className="comment-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p><small>{comment.time}</small></div>)}{(commentsByPost[String(post.id)] ?? []).length === 0 && <p className="no-comments">Start the conversation with a thoughtful comment.</p>}</div><form className="comment-form" onSubmit={event => { event.preventDefault(); void addComment(post.id); }}><input value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Write a comment..." maxLength={2000} aria-label="Write a comment" /><button type="submit" disabled={!commentDraft.trim()}>Send</button></form></div>}</article>)}
+          {visiblePosts.map(post => <article className="post-card" key={post.id}><div className="post-header"><div className={"avatar " + post.color}>{post.initials}</div><div className="post-author"><strong>{post.name} <span className="verified">✓</span></strong><span>{post.handle} · {post.time}</span></div><button className="more-button" aria-label="More post options" onClick={() => { setReportingPostId(post.id); setReportReason("spam"); setReportDetails(""); }}>•••</button></div><p className="post-copy">{post.text}</p><div className="tag-row">{post.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>{post.image && <div className="post-image-wrap"><Image src={post.image} alt="Community post visual" width={1200} height={800} unoptimized className="post-image" /></div>}{post.video && <div className="post-image-wrap"><video src={post.video} controls playsInline className="post-image" /></div>}<div className="post-stats"><span>{post.likes + (liked.includes(post.id) ? 1 : 0)} appreciations</span><span>{post.comments} comments · Share</span></div><div className="post-actions"><button className={liked.includes(post.id) ? "post-action is-liked" : "post-action"} onClick={() => void toggleLike(post.id)}><span>♡</span> Appreciate</button><button className="post-action" onClick={() => void openComments(post.id)}><span>▢</span> Comment</button><button className="post-action" onClick={() => setNotice("Sharing will be enabled for published posts.")}><span>↗</span> Share</button><button className={savedIds.includes(String(post.id)) ? "post-action save-action is-saved" : "post-action save-action"} aria-label={savedIds.includes(String(post.id)) ? "Remove saved post" : "Save post"} onClick={() => void toggleSave(post.id)}><span>{savedIds.includes(String(post.id)) ? "▣" : "▱"}</span></button></div>{commentingPostId === post.id && <div className="comment-thread"><div className="comment-list">{(commentsByPost[String(post.id)] ?? []).map(comment => <div className="comment-item" key={comment.id}><strong>{comment.author}</strong><p>{comment.body}</p><small>{comment.time}</small></div>)}{(commentsByPost[String(post.id)] ?? []).length === 0 && <p className="no-comments">Start the conversation with a thoughtful comment.</p>}</div><form className="comment-form" onSubmit={event => { event.preventDefault(); void addComment(post.id); }}><input value={commentDraft} onChange={event => setCommentDraft(event.target.value)} placeholder="Write a comment..." maxLength={2000} aria-label="Write a comment" /><button type="submit" disabled={!commentDraft.trim()}>Send</button></form></div>}</article>)}
           <div className="feed-end"><span>✦</span><p>You&apos;re all caught up for now.</p><small>More from your world is on the way.</small></div>
         </section>
         <aside className="right-sidebar">
@@ -304,6 +338,7 @@ export default function SmartTagHome() {
       </div>
       {showComposer && <div className="modal-backdrop" onClick={() => setShowComposer(false)}><section className="composer-modal" onClick={e => e.stopPropagation()}><div className="modal-heading"><div><span className="eyebrow">CREATE SOMETHING</span><h2>Share with your world</h2></div><button onClick={() => setShowComposer(false)}>×</button></div><div className="modal-user"><div className="avatar blue">YO</div><div><strong>Your profile</strong><span>Sharing with your community</span></div></div><textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} placeholder="What's happening in your world?" /><div className="modal-tools"><label className="cursor-pointer">▧ Add photo/video<input type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm" className="sr-only" onChange={event => { const file = event.target.files?.[0]; if (file) setSelectedFile(file); event.target.value = ""; }} /></label><span># Add tags</span></div>{selectedFile && <div className="mb-3 flex items-center justify-between rounded-lg bg-white/5 p-3 text-[10px] text-slate-300"><span className="truncate">{selectedFile.name} · {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB</span><button onClick={() => setSelectedFile(null)} className="ml-3 text-rose-300">Remove</button></div>}<button className="publish-button" disabled={(!draft.trim() && !selectedFile) || publishing} onClick={() => void publish()}>{publishing ? "Publishing…" : "Publish post"} <span>→</span></button><p className="demo-note">Text-only demo posts stay in this page session. Signed-in photo and video posts are saved to SmartTag.</p></section></div>}
       {activeStory && <div className="modal-backdrop" onClick={() => setActiveStory(null)}><section className="story-viewer" onClick={event => event.stopPropagation()}><button className="story-close" onClick={() => setActiveStory(null)} aria-label="Close story">×</button><div className="story-viewer-media">{activeStory.kind === "video" ? <video src={activeStory.url} controls autoPlay playsInline className="h-full max-h-[75vh] w-full object-contain" /> : <Image src={activeStory.url} alt={activeStory.caption || activeStory.name + " story"} width={900} height={1200} unoptimized className="h-full max-h-[75vh] w-full object-contain" />}</div><div className="p-4"><strong className="text-xs">{activeStory.name}</strong>{activeStory.caption && <p className="mt-2 text-xs text-slate-300">{activeStory.caption}</p>}</div></section></div>}
+      {reportingPostId !== null && <div className="modal-backdrop" onClick={() => setReportingPostId(null)}><section className="composer-modal" onClick={event => event.stopPropagation()}><div className="modal-heading"><div><span className="eyebrow">COMMUNITY SAFETY</span><h2>Report this post</h2></div><button onClick={() => setReportingPostId(null)}>×</button></div><p className="mt-4 text-xs leading-5 text-slate-400">Tell us why this post should be reviewed. Reports are private and are not shown to the reported member.</p><form onSubmit={submitReport} className="mt-5 space-y-4"><label className="block text-xs text-slate-300">Reason<select value={reportReason} onChange={event => setReportReason(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b111c] px-3 py-3 text-xs text-white"><option value="spam">Spam or scam</option><option value="harassment">Harassment or bullying</option><option value="hate">Hateful content</option><option value="violence">Violent content</option><option value="nudity">Nudity or sexual content</option><option value="misinformation">False or misleading information</option><option value="other">Something else</option></select></label><label className="block text-xs text-slate-300">Additional details (optional)<textarea value={reportDetails} onChange={event => setReportDetails(event.target.value)} maxLength={2000} rows={3} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b111c] px-3 py-3 text-xs text-white outline-none focus:border-blue-400" placeholder="Share any context that may help our review." /></label><button disabled={reporting} className="w-full rounded-xl bg-rose-600 py-3 text-xs font-bold text-white disabled:opacity-50">{reporting ? "Submitting…" : "Submit report"}</button></form></section></div>}
       <nav className="mobile-nav">{navItems.map(item => item.label === "Explore" ? <Link key={item.label} href="/people"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Reels" ? <Link key={item.label} href="/reels"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Communities" ? <Link key={item.label} href="/communities"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Saved" ? <Link key={item.label} href="/saved"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Messages" ? <Link key={item.label} href="/messages"><span>{item.icon}</span><small>{item.label}</small></Link> : item.label === "Vault" ? <Link key={item.label} href="/vault"><span>{item.icon}</span><small>{item.label}</small></Link> : <button key={item.label} className={active === item.label ? "mobile-active" : ""} onClick={() => setActive(item.label)}><span>{item.icon}</span><small>{item.label}</small></button>)}</nav>
     </main>
   );
