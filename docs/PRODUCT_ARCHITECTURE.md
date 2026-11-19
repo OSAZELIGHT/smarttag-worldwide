@@ -50,6 +50,7 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 - [x] Add community creation, public membership and private community shells.
 - [x] Add video discovery and a Reels feed.
 - [x] Add story publishing, expiry-aware feed loading and a story viewer.
+- [x] Add notification generation for follows, reactions, comments and messages, plus a read-state inbox.
 - [ ] Add server-enforced authenticated route protection.
 
 ### Stage 2 — working social foundation
@@ -67,7 +68,7 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 
 ### Stage 4 — communications
 - [x] Basic one-to-one text messaging and conversation membership.
-- Group messaging, realtime delivery, unread counts, read receipts and notifications.
+- Group messaging, realtime delivery, unread counts and read receipts. Persisted notifications for core social events are implemented.
 - Safe media sharing, conversation controls and abuse-report workflows.
 
 ### Stage 5 — SmartTag differentiation
@@ -84,7 +85,7 @@ The initial SQL migration defines profiles, follows, user blocking, posts, media
 
 ## Current prototype limitations
 
-The home feed includes demo examples and can load visible posts for signed-in users. Authenticated users can publish text and photo/video posts, react and comment; demo-only sample posts remain local. Member discovery supports follow/unfollow and private-profile requests. Profile settings support editing and request approval. The capture studio can record photos/videos, accept device uploads, download locally, and upload captures with a title and tags to the private Smart Vault. The Vault supports signed previews, tag/search filtering and deletion. Basic one-to-one text messaging is implemented without realtime delivery. Stories can be published and viewed with a 24-hour expiry; community creation and public joining, saved posts, and video discovery are present. Group messaging, realtime notifications, community posts/moderation, automated story cleanup, advanced search and production moderation remain unfinished.
+The home feed includes demo examples and can load visible posts for signed-in users. Authenticated users can publish text and photo/video posts, react and comment; demo-only sample posts remain local. Member discovery supports follow/unfollow and private-profile requests. Profile settings support editing and request approval. The capture studio can record photos/videos, accept device uploads, download locally, and upload captures with a title and tags to the private Smart Vault. The Vault supports signed previews, tag/search filtering and deletion. Basic one-to-one text messaging is implemented without realtime delivery. Stories can be published and viewed with a 24-hour expiry; community creation and public joining, saved posts, and video discovery are present. Group messaging, realtime message delivery, unread counts/read receipts, community posts/moderation, automated story cleanup, advanced search and production moderation remain unfinished.
 
 ## Required environment
 
