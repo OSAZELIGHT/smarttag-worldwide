@@ -37,6 +37,25 @@ export default function ProfileSettings() {
       .single();
     if (profileError) setError(profileError.message);
     else if (data) setProfile(data);
+
+    const { data: pending } = await supabase.from("follows")
+      .select("follower_id")
+      .eq("following_id", authData.user.id)
+      .eq("status", "pending");
+    const requesterIds = (pending ?? []).map(row => row.follower_id);
+    if (requesterIds.length) {
+      const { data: requestProfiles } = await supabase.from("profiles")
+        .select("id, username, display_name")
+        .in("id", requesterIds);
+      const byId = new Map((requestProfiles ?? []).map(item => [item.id, item]));
+      setRequests(requesterIds.map(id => ({
+        follower_id: id,
+        username: byId.get(id)?.username ?? "member",
+        display_name: byId.get(id)?.display_name ?? "SmartTag member",
+      })));
+    } else {
+      setRequests([]);
+    }
     setLoading(false);
   }, []);
 
@@ -49,8 +68,14 @@ export default function ProfileSettings() {
     setError("");
     setMessage("");
     const username = profile.username.trim().toLowerCase();
+    const displayName = profile.display_name.trim();
     if (!/^[a-zA-Z0-9_.]{3,30}$/.test(username)) {
       setError("Username must be 3–30 characters using letters, numbers, dots or underscores.");
+      setSaving(false);
+      return;
+    }
+    if (!displayName) {
+      setError("Please enter a display name.");
       setSaving(false);
       return;
     }
@@ -62,20 +87,36 @@ export default function ProfileSettings() {
     }
     const { error: updateError } = await supabase.from("profiles").update({
       username,
-      display_name: profile.display_name.trim(),
+      display_name: displayName,
       bio: profile.bio.trim(),
       is_private: profile.is_private,
       updated_at: new Date().toISOString(),
     }).eq("id", authData.user.id);
     if (updateError) setError(updateError.message);
     else {
-      setProfile(current => ({ ...current, username }));
+      setProfile(current => ({ ...current, username, display_name: displayName }));
       setMessage("Your profile has been updated.");
     }
     setSaving(false);
   }
 
-  async function handleRequest(followerId: string, accept: boolean) {\n    if (!supabase) return;\n    const result = accept\n      ? await supabase.rpc("accept_follow_request", { target_follower_id: followerId })\n      : await supabase.from("follows").delete().eq("follower_id", followerId).eq("following_id", (await supabase.auth.getUser()).data.user?.id ?? "");\n    if (result.error) { setError(result.error.message); return; }\n    setRequests(current => current.filter(request => request.follower_id !== followerId));\n    setMessage(accept ? "Follower request approved." : "Follower request declined.");\n  }\n\n  async function signOut() {
+  async function handleRequest(followerId: string, accept: boolean) {
+    if (!supabase) return;
+    setError("");
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) return;
+    const result = accept
+      ? await supabase.rpc("accept_follow_request", { target_follower_id: followerId })
+      : await supabase.from("follows").delete().eq("follower_id", followerId).eq("following_id", authData.user.id);
+    if (result.error) {
+      setError(result.error.message);
+      return;
+    }
+    setRequests(current => current.filter(request => request.follower_id !== followerId));
+    setMessage(accept ? "Follower request approved." : "Follower request declined.");
+  }
+
+  async function signOut() {
     if (!supabase) return;
     await supabase.auth.signOut();
     router.push("/auth");
@@ -90,16 +131,41 @@ export default function ProfileSettings() {
           <p className="text-[10px] font-bold uppercase tracking-[.2em] text-blue-300">YOUR IDENTITY</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight">Profile settings</h1>
           <p className="mt-2 text-sm text-slate-400">Choose how people see you across SmartTag.</p>
-          {loading ? <p className="mt-8 text-sm text-slate-500">Loading your profile…</p> : error && !email ? <div className="mt-7 rounded-xl border border-amber-300/20 bg-amber-300/5 p-4 text-xs leading-6 text-amber-100">{error}<div className="mt-3"><Link href="/auth" className="font-bold underline">Go to sign in</Link></div></div> : {requests.length > 0 && <section className="mb-7 rounded-xl border border-blue-300/20 bg-blue-300/5 p-4"><h2 className="text-sm font-bold">Follower requests <span className="ml-1 text-blue-300">({requests.length})</span></h2><div className="mt-3 space-y-3">{requests.map(request => <div key={request.follower_id} className="flex flex-wrap items-center justify-between gap-3"><div><strong className="block text-xs">{request.display_name}</strong><span className="text-[10px] text-slate-500">@{request.username}</span></div><div className="flex gap-2"><button type="button" onClick={() => void handleRequest(request.follower_id, false)} className="rounded-lg border border-white/10 px-3 py-2 text-[10px] text-slate-300">Decline</button><button type="button" onClick={() => void handleRequest(request.follower_id, true)} className="rounded-lg bg-blue-600 px-3 py-2 text-[10px] font-bold text-white">Approve</button></div></div>)}</div></section>}<form onSubmit={save} className="mt-8 space-y-5">
-            <div className="rounded-xl bg-black/20 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Signed in as</p><p className="mt-1 text-sm text-slate-200">{email}</p></div>
-            <label className="block text-xs font-semibold text-slate-300">Display name<input required value={profile.display_name} onChange={event => setProfile(current => ({ ...current, display_name: event.target.value }))} maxLength={80} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b111c] px-4 py-3 text-sm outline-none focus:border-blue-400" /></label>
-            <label className="block text-xs font-semibold text-slate-300">Username<input required value={profile.username} onChange={event => setProfile(current => ({ ...current, username: event.target.value }))} minLength={3} maxLength={30} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b111c] px-4 py-3 text-sm outline-none focus:border-blue-400" /><span className="mt-1 block text-[10px] text-slate-500">Your public SmartTag handle.</span></label>
-            <label className="block text-xs font-semibold text-slate-300">Bio<textarea value={profile.bio} onChange={event => setProfile(current => ({ ...current, bio: event.target.value }))} maxLength={500} rows={4} className="mt-2 w-full resize-y rounded-xl border border-white/10 bg-[#0b111c] px-4 py-3 text-sm outline-none focus:border-blue-400" placeholder="Tell your community a little about yourself." /></label>
-            <label className="flex items-center gap-3 rounded-xl border border-white/10 p-4 text-xs text-slate-300"><input type="checkbox" checked={profile.is_private} onChange={event => setProfile(current => ({ ...current, is_private: event.target.checked }))} className="h-4 w-4 accent-blue-500" /><span><strong className="block text-white">Private profile</strong><span className="mt-1 block text-slate-500">Limit profile and post visibility to approved followers.</span></span></label>
-            {error && <p role="alert" className="rounded-lg bg-rose-400/10 p-3 text-xs text-rose-200">{error}</p>}
-            {message && <p role="status" className="rounded-lg bg-emerald-400/10 p-3 text-xs text-emerald-200">{message}</p>}
-            <div className="flex flex-wrap gap-3"><button disabled={saving} className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save profile"}</button><button type="button" onClick={() => void signOut()} className="rounded-xl border border-white/10 px-5 py-3 text-xs text-slate-300">Sign out</button></div>
-          </form>}
+          {loading ? <p className="mt-8 text-sm text-slate-500">Loading your profile…</p> : error && !email ? (
+            <div className="mt-7 rounded-xl border border-amber-300/20 bg-amber-300/5 p-4 text-xs leading-6 text-amber-100">
+              {error}
+              <div className="mt-3"><Link href="/auth" className="font-bold underline">Go to sign in</Link></div>
+            </div>
+          ) : (
+            <>
+              {requests.length > 0 && (
+                <section className="mt-7 rounded-xl border border-blue-300/20 bg-blue-300/5 p-4">
+                  <h2 className="text-sm font-bold">Follower requests <span className="ml-1 text-blue-300">({requests.length})</span></h2>
+                  <div className="mt-3 space-y-3">
+                    {requests.map(request => (
+                      <div key={request.follower_id} className="flex flex-wrap items-center justify-between gap-3">
+                        <div><strong className="block text-xs">{request.display_name}</strong><span className="text-[10px] text-slate-500">@{request.username}</span></div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => void handleRequest(request.follower_id, false)} className="rounded-lg border border-white/10 px-3 py-2 text-[10px] text-slate-300">Decline</button>
+                          <button type="button" onClick={() => void handleRequest(request.follower_id, true)} className="rounded-lg bg-blue-600 px-3 py-2 text-[10px] font-bold text-white">Approve</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+              <form onSubmit={save} className="mt-8 space-y-5">
+                <div className="rounded-xl bg-black/20 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Signed in as</p><p className="mt-1 text-sm text-slate-200">{email}</p></div>
+                <label className="block text-xs font-semibold text-slate-300">Display name<input required value={profile.display_name} onChange={event => setProfile(current => ({ ...current, display_name: event.target.value }))} maxLength={80} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b111c] px-4 py-3 text-sm outline-none focus:border-blue-400" /></label>
+                <label className="block text-xs font-semibold text-slate-300">Username<input required value={profile.username} onChange={event => setProfile(current => ({ ...current, username: event.target.value }))} minLength={3} maxLength={30} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b111c] px-4 py-3 text-sm outline-none focus:border-blue-400" /><span className="mt-1 block text-[10px] text-slate-500">Your public SmartTag handle.</span></label>
+                <label className="block text-xs font-semibold text-slate-300">Bio<textarea value={profile.bio} onChange={event => setProfile(current => ({ ...current, bio: event.target.value }))} maxLength={500} rows={4} className="mt-2 w-full resize-y rounded-xl border border-white/10 bg-[#0b111c] px-4 py-3 text-sm outline-none focus:border-blue-400" placeholder="Tell your community a little about yourself." /></label>
+                <label className="flex items-center gap-3 rounded-xl border border-white/10 p-4 text-xs text-slate-300"><input type="checkbox" checked={profile.is_private} onChange={event => setProfile(current => ({ ...current, is_private: event.target.checked }))} className="h-4 w-4 accent-blue-500" /><span><strong className="block text-white">Private profile</strong><span className="mt-1 block text-slate-500">New followers must request access. You approve requests here.</span></span></label>
+                {error && <p role="alert" className="rounded-lg bg-rose-400/10 p-3 text-xs text-rose-200">{error}</p>}
+                {message && <p role="status" className="rounded-lg bg-emerald-400/10 p-3 text-xs text-emerald-200">{message}</p>}
+                <div className="flex flex-wrap gap-3"><button disabled={saving} className="rounded-xl bg-blue-600 px-5 py-3 text-xs font-bold text-white disabled:opacity-50">{saving ? "Saving…" : "Save profile"}</button><button type="button" onClick={() => void signOut()} className="rounded-xl border border-white/10 px-5 py-3 text-xs text-slate-300">Sign out</button></div>
+              </form>
+            </>
+          )}
         </div>
       </section>
     </main>
