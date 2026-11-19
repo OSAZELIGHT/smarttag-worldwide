@@ -13,6 +13,7 @@ export default function ProfileSettings() {
   const [profile, setProfile] = useState<Profile>({ username: "", display_name: "", bio: "", is_private: false });
   const [email, setEmail] = useState("");
   const [requests, setRequests] = useState<FollowRequest[]>([]);
+  const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -56,6 +57,8 @@ export default function ProfileSettings() {
     } else {
       setRequests([]);
     }
+    const { data: blocked } = await supabase.from("user_blocks").select("blocked_id").eq("blocker_id", authData.user.id);
+    setBlockedUsers((blocked ?? []).map(row => row.blocked_id));
     setLoading(false);
   }, []);
 
@@ -120,6 +123,20 @@ export default function ProfileSettings() {
     setMessage(accept ? "Follower request approved." : "Follower request declined.");
   }
 
+  async function unblockUser(blockedId: string) {
+    if (!supabase) return;
+    const { data: authData } = await supabase.auth.getUser();
+    if (!authData.user) return;
+    const { error: unblockError } = await supabase.from("user_blocks").delete()
+      .eq("blocker_id", authData.user.id)
+      .eq("blocked_id", blockedId);
+    if (unblockError) setError(unblockError.message);
+    else {
+      setBlockedUsers(current => current.filter(id => id !== blockedId));
+      setMessage("Account unblocked. You can connect again if you choose.");
+    }
+  }
+
   async function signOut() {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -142,6 +159,7 @@ export default function ProfileSettings() {
             </div>
           ) : (
             <>
+              {blockedUsers.length > 0 && <section className="mt-7 rounded-xl border border-rose-300/20 bg-rose-300/5 p-4"><h2 className="text-sm font-bold">Blocked accounts <span className="ml-1 text-rose-200">({blockedUsers.length})</span></h2><div className="mt-3 space-y-3">{blockedUsers.map(id => <div key={id} className="flex items-center justify-between gap-3"><span className="font-mono text-[10px] text-slate-400">{id.slice(0, 8)}…{id.slice(-4)}</span><button type="button" onClick={() => void unblockUser(id)} className="rounded-lg border border-white/10 px-3 py-2 text-[10px] text-slate-300">Unblock</button></div>)}</div></section>}
               {requests.length > 0 && (
                 <section className="mt-7 rounded-xl border border-blue-300/20 bg-blue-300/5 p-4">
                   <h2 className="text-sm font-bold">Follower requests <span className="ml-1 text-blue-300">({requests.length})</span></h2>
