@@ -45,7 +45,7 @@ The intended production architecture uses Supabase for authentication, relationa
 
 ## Current development status
 
-The social experience is being built in stages. The current branch introduces the product direction and a navigable social-platform interface prototype. Demo feed content and local interactions are illustrative; they are not yet backed by user accounts, a live database, messaging infrastructure or real media uploads.
+The social experience is being built in stages. The current branch introduces a responsive social-platform home, local demo interactions, browser camera capture, a Supabase email sign-up/sign-in screen, and an initial database migration. The feed is still demo content; posts, reactions and follows are not yet persisted. Stories, messaging, community membership, discovery and cloud media uploads still require implementation.
 
 Before public launch, the project still needs:
 1. Supabase project configuration and environment variables.
@@ -67,7 +67,7 @@ npm run dev
 
 Open http://localhost:3000.
 
-Create a local `.env.local` from the environment variables required by the Supabase integration once a Supabase project has been provisioned. Never commit secret service-role keys. Only a public anon/publishable key may be exposed to browser code, and it must be protected by database and storage policies.
+Copy `.env.example` to `.env.local` and add your Supabase project URL and public anon/publishable key. Apply the reviewed SQL migration in `supabase/migrations/` to your Supabase project before enabling real accounts. Never commit secret service-role keys. Only a public anon/publishable key may be exposed to browser code, and it must be protected by database and storage policies.
 
 ## Project ownership
 
