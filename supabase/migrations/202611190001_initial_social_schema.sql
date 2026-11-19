@@ -203,7 +203,7 @@ as $function$
 begin
   update public.follows
   set status='accepted'
-  where follower_id=target_follower_id and following_id=auth.uid() and status='pending';
+  where follower_id=target_follower_id and following_id=auth.uid() and status='pending' and not public.is_blocked_with(target_follower_id);
   return found;
 end;
 $function$;
@@ -283,7 +283,7 @@ create policy messages_update on public.messages for update to authenticated usi
 create policy notifications_read on public.notifications for select to authenticated using (recipient_id=auth.uid());
 create policy notifications_update on public.notifications for update to authenticated using (recipient_id=auth.uid()) with check (recipient_id=auth.uid());
 create policy hashtags_read on public.hashtags for select to authenticated using (true);
-create policy post_hashtags_read on public.post_hashtags for select to authenticated using (exists(select 1 from public.posts p where p.id=post_id and (p.visibility='public' or p.author_id=auth.uid())));
+create policy post_hashtags_read on public.post_hashtags for select to authenticated using (exists(select 1 from public.posts p where p.id=post_id and p.deleted_at is null));
 create policy post_hashtags_insert on public.post_hashtags for insert to authenticated with check (exists(select 1 from public.posts p where p.id=post_id and p.author_id=auth.uid()));
 create policy reports_insert on public.content_reports for insert to authenticated with check (reporter_id=auth.uid());
 create policy reports_read on public.content_reports for select to authenticated using (reporter_id=auth.uid());
@@ -294,7 +294,7 @@ insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types) v
 ('message-media','message-media',false,52428800,array['image/jpeg','image/png','image/webp','video/mp4','video/webm'])
 on conflict(id) do update set public=excluded.public,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
 create policy user_media_upload on storage.objects for insert to authenticated with check (bucket_id='user-media' and (storage.foldername(name))[1]=auth.uid()::text);
-create policy user_media_read on storage.objects for select to authenticated using (bucket_id='user-media' and ((storage.foldername(name))[1]=auth.uid()::text or exists(select 1 from public.post_media pm join public.posts p on p.id=pm.post_id where pm.storage_path=name and p.visibility='public' and p.deleted_at is null and not public.is_blocked_with(p.author_id))));
+create policy user_media_read on storage.objects for select to authenticated using (bucket_id='user-media' and ((storage.foldername(name))[1]=auth.uid()::text or exists(select 1 from public.post_media pm join public.posts p on p.id=pm.post_id where pm.storage_path=name and p.deleted_at is null)));
 create policy user_media_update on storage.objects for update to authenticated using (bucket_id='user-media' and (storage.foldername(name))[1]=auth.uid()::text) with check (bucket_id='user-media' and (storage.foldername(name))[1]=auth.uid()::text);
 create policy user_media_delete on storage.objects for delete to authenticated using (bucket_id='user-media' and (storage.foldername(name))[1]=auth.uid()::text);
 create policy story_media_upload on storage.objects for insert to authenticated with check (bucket_id='story-media' and (storage.foldername(name))[1]=auth.uid()::text);
