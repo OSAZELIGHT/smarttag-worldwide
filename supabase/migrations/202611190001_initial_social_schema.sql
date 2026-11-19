@@ -241,8 +241,23 @@ create policy "Members leave themselves" on public.community_members for delete 
 
 create policy "Members see their conversations" on public.conversations for select to authenticated using (exists (select 1 from public.conversation_members m where m.conversation_id = id and m.user_id = auth.uid()));
 create policy "Members create conversations" on public.conversations for insert to authenticated with check (created_by = auth.uid());
-create policy "Members see conversation participants" on public.conversation_members for select to authenticated using (exists (select 1 from public.conversation_members m where m.conversation_id = conversation_id and m.user_id = auth.uid()));
-create policy "Conversation creator adds members" on public.conversation_members for insert to authenticated with check (exists (select 1 from public.conversations c where c.id = conversation_id and c.created_by = auth.uid()) or user_id = auth.uid());
+create or replace function public.is_conversation_member(target_conversation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $
+  select exists (
+    select 1 from public.conversation_members m
+    where m.conversation_id = target_conversation_id and m.user_id = auth.uid()
+  );
+$;
+revoke all on function public.is_conversation_member(uuid) from public;
+grant execute on function public.is_conversation_member(uuid) to authenticated;
+
+create policy "Members see conversation participants" on public.conversation_members for select to authenticated using (public.is_conversation_member(conversation_id));
+create policy "Conversation creator adds members" on public.conversation_members for insert to authenticated with check (exists (select 1 from public.conversations c where c.id = conversation_id and c.created_by = auth.uid()));
 create policy "Members see messages in their conversations" on public.messages for select to authenticated using (deleted_at is null and exists (select 1 from public.conversation_members m where m.conversation_id = conversation_id and m.user_id = auth.uid()));
 create policy "Members send messages as themselves" on public.messages for insert to authenticated with check (sender_id = auth.uid() and exists (select 1 from public.conversation_members m where m.conversation_id = conversation_id and m.user_id = auth.uid()));
 create policy "Senders edit their own messages" on public.messages for update to authenticated using (sender_id = auth.uid()) with check (sender_id = auth.uid());
