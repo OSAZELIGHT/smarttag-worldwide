@@ -12,7 +12,11 @@ export default function CameraForge() {
   const [message, setMessage] = useState("");
 
   useEffect(() => () => {
-    recorderRef.current?.stop();
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.onstop = null;
+      recorder.stop();
+    }
     streamRef.current?.getTracks().forEach(track => track.stop());
   }, []);
 
@@ -51,7 +55,7 @@ export default function CameraForge() {
       link.href = url;
       link.download = `smarttag-capture-${Date.now()}.jpg`;
       link.click();
-      URL.revokeObjectURL(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMessage("Photo captured. It was downloaded to this device; cloud vault upload is not connected yet.");
     }, "image/jpeg", 0.92);
   }
