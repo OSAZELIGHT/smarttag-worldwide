@@ -56,11 +56,12 @@ export default function SmartTagHome() {
       if (!active) return;
       const profileMap = new Map((profiles ?? []).map(profile => [profile.id, profile]));
       const counts = new Map<string, number>();
+      const mineIds = new Set((mine ?? []).map(reaction => reaction.post_id));
       (reactions ?? []).forEach(reaction => counts.set(reaction.post_id, (counts.get(reaction.post_id) ?? 0) + 1));
       setPosts(rows.map(row => {
         const profile = profileMap.get(row.author_id);
         const displayName = profile?.display_name ?? "SmartTag member";
-        return { id: row.id, authorId: row.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: timeAgo(row.created_at), initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: row.body, tags: [], likes: counts.get(row.id) ?? 0, comments: 0, kind: "text" as const };
+        return { id: row.id, authorId: row.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: timeAgo(row.created_at), initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: row.body, tags: [], likes: Math.max(0, (counts.get(row.id) ?? 0) - (mineIds.has(row.id) ? 1 : 0)), comments: 0, kind: "text" as const };
       }));
       setLiked((mine ?? []).map(reaction => reaction.post_id));
     }
