@@ -1,17 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import CameraForge from "@/components/CameraForge";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
-type Post = { id: number; name: string; handle: string; time: string; initials: string; color: string; text: string; tags: string[]; image?: string; likes: number; comments: number; kind: "photo" | "video" | "text" };
+type Post = { id: string | number; authorId?: string; name: string; handle: string; time: string; initials: string; color: string; text: string; tags: string[]; image?: string; likes: number; comments: number; kind: "photo" | "video" | "text" };
 
 const starterPosts: Post[] = [
   { id: 1, name: "Amara Okafor", handle: "@amara.creates", time: "12 min ago", initials: "AO", color: "coral", text: "A little reminder to keep creating, keep learning and keep showing up. Your next chapter can start with one small step. ✨", tags: ["CreatorLife", "MondayMotivation"], image: "https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?auto=format&fit=crop&w=1200&q=85", likes: 248, comments: 32, kind: "photo" },
   { id: 2, name: "Daniel Eze", handle: "@daniel.eze", time: "38 min ago", initials: "DE", color: "blue", text: "Exploring the city, meeting new people and finding inspiration in unexpected places. What are you discovering this week?", tags: ["Community", "Explore"], likes: 86, comments: 14, kind: "text" },
   { id: 3, name: "SmartTag Creators", handle: "@smarttag.creators", time: "1 hr ago", initials: "SC", color: "violet", text: "Welcome to the creator corner. Share what you are building, ask questions and connect with people who love making things.", tags: ["SmartTagCommunity", "Creators"], image: "https://images.unsplash.com/photo-1521737711867-e3b97375f902?auto=format&fit=crop&w=1200&q=85", likes: 512, comments: 76, kind: "photo" },
 ];
+
+function timeAgo(value: string) {
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return "Just now";
+  if (seconds < 3600) return Math.floor(seconds / 60) + " min ago";
+  if (seconds < 86400) return Math.floor(seconds / 3600) + " hr ago";
+  return Math.floor(seconds / 86400) + " days ago";
+}
 
 const stories = [{ name: "Your story", initials: "+", color: "add" }, { name: "Amara", initials: "AO", color: "coral" }, { name: "Daniel", initials: "DE", color: "blue" }, { name: "Mariam", initials: "MK", color: "gold" }, { name: "Tobi", initials: "TA", color: "violet" }, { name: "Creators", initials: "SC", color: "green" }];
 const navItems = [{ label: "Home", icon: "⌂" }, { label: "Explore", icon: "⌕" }, { label: "Reels", icon: "▷" }, { label: "Messages", icon: "✉" }, { label: "Communities", icon: "♧" }, { label: "Saved", icon: "▱" }];
@@ -20,7 +29,8 @@ export default function SmartTagHome() {
   const [active, setActive] = useState("Home");
   const [filter, setFilter] = useState("For you");
   const [posts, setPosts] = useState(starterPosts);
-  const [liked, setLiked] = useState<number[]>([]);
+  const [liked, setLiked] = useState<Array<string | number>>([]);
+  const [publishing, setPublishing] = useState(false);
   const [following, setFollowing] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [showComposer, setShowComposer] = useState(false);
@@ -28,10 +38,76 @@ export default function SmartTagHome() {
   const [notice, setNotice] = useState("");
   const visiblePosts = useMemo(() => filter === "Videos" ? posts.filter(p => p.kind === "video") : filter === "Photos" ? posts.filter(p => p.kind === "photo") : posts, [filter, posts]);
 
-  function publish() {
-    if (!draft.trim()) return;
-    setPosts([{ id: Date.now(), name: "You", handle: "@yourprofile", time: "Just now", initials: "YO", color: "blue", text: draft.trim(), tags: ["NewPost"], likes: 0, comments: 0, kind: "text" }, ...posts]);
-    setDraft(""); setShowComposer(false); setNotice("Your post has been added to this demo feed.");
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+    let active = true;
+    async function loadSocialFeed() {
+      const { data: authData } = await supabase!.auth.getUser();
+      if (!authData.user) return;
+      const { data: rows, error } = await supabase!.from("posts").select("id, body, created_at, author_id").eq("visibility", "public").is("deleted_at", null).order("created_at", { ascending: false }).limit(30);
+      if (error || !rows?.length || !active) return;
+      const authorIds = [...new Set(rows.map(row => row.author_id))];
+      const postIds = rows.map(row => row.id);
+      const [{ data: profiles }, { data: reactions }, { data: mine }] = await Promise.all([
+        supabase!.from("profiles").select("id, username, display_name").in("id", authorIds),
+        supabase!.from("post_reactions").select("post_id").in("post_id", postIds),
+        supabase!.from("post_reactions").select("post_id").eq("user_id", authData.user.id).in("post_id", postIds),
+      ]);
+      if (!active) return;
+      const profileMap = new Map((profiles ?? []).map(profile => [profile.id, profile]));
+      const counts = new Map<string, number>();
+      (reactions ?? []).forEach(reaction => counts.set(reaction.post_id, (counts.get(reaction.post_id) ?? 0) + 1));
+      setPosts(rows.map(row => {
+        const profile = profileMap.get(row.author_id);
+        const displayName = profile?.display_name ?? "SmartTag member";
+        return { id: row.id, authorId: row.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: timeAgo(row.created_at), initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: row.body, tags: [], likes: counts.get(row.id) ?? 0, comments: 0, kind: "text" as const };
+      }));
+      setLiked((mine ?? []).map(reaction => reaction.post_id));
+    }
+    void loadSocialFeed();
+    return () => { active = false; };
+  }, []);
+
+  async function publish() {
+    const body = draft.trim();
+    if (!body || publishing) return;
+    setPublishing(true);
+    try {
+      let newPost: Post = { id: Date.now(), name: "You", handle: "@yourprofile", time: "Just now", initials: "YO", color: "blue", text: body, tags: ["NewPost"], likes: 0, comments: 0, kind: "text" };
+      let message = "Your post has been added to this demo feed.";
+      if (isSupabaseConfigured && supabase) {
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData.user) {
+          const { data, error } = await supabase.from("posts").insert({ author_id: authData.user.id, body, visibility: "public" }).select("id, body, created_at, author_id").single();
+          if (error) throw error;
+          const { data: profile } = await supabase.from("profiles").select("username, display_name").eq("id", authData.user.id).single();
+          const displayName = profile?.display_name ?? "You";
+          newPost = { id: data.id, authorId: data.author_id, name: displayName, handle: "@" + (profile?.username ?? "member"), time: "Just now", initials: displayName.split(/\\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase(), color: "blue", text: data.body, tags: [], likes: 0, comments: 0, kind: "text" };
+          message = "Your post has been published to SmartTag.";
+        }
+      }
+      setPosts(current => [newPost, ...current]);
+      setDraft(""); setShowComposer(false); setNotice(message);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Your post could not be published. Please try again.");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function toggleLike(postId: string | number) {
+    const alreadyLiked = liked.includes(postId);
+    const post = posts.find(item => item.id === postId);
+    if (typeof postId === "string" && post?.authorId && isSupabaseConfigured && supabase) {
+      const { data: authData } = await supabase.auth.getUser();
+      if (authData.user) {
+        const result = alreadyLiked
+          ? await supabase.from("post_reactions").delete().eq("post_id", postId).eq("user_id", authData.user.id)
+          : await supabase.from("post_reactions").insert({ post_id: postId, user_id: authData.user.id, reaction: "like" });
+        if (result.error) { setNotice(result.error.message); return; }
+      }
+    }
+    setLiked(current => alreadyLiked ? current.filter(id => id !== postId) : [...current, postId]);
   }
 
   return (
@@ -58,7 +134,7 @@ export default function SmartTagHome() {
           <section className="composer-card"><div className="avatar blue">YO</div><button className="composer-prompt" onClick={() => setShowComposer(true)}>Share something with your community...</button><button className="composer-tool photo-tool" onClick={() => setNotice("Photo uploads will be connected to Smart Vault.")}>▧ <span>Photo</span></button><button className="composer-tool video-tool" onClick={() => setNotice("Video uploads and short videos are on the product roadmap.")}>▷ <span>Video</span></button></section>
           <div className="feed-heading"><div><h2>Your feed</h2><p>Ideas, moments and conversations</p></div><div className="feed-filters">{["For you", "Following", "Photos", "Videos"].map(f => <button key={f} className={filter === f ? "filter active-filter" : "filter"} onClick={() => setFilter(f)}>{f}</button>)}</div></div>
           {visiblePosts.length === 0 && <div className="empty-state">No {filter.toLowerCase()} in this demo feed yet.</div>}
-          {visiblePosts.map(post => <article className="post-card" key={post.id}><div className="post-header"><div className={"avatar " + post.color}>{post.initials}</div><div className="post-author"><strong>{post.name} <span className="verified">✓</span></strong><span>{post.handle} · {post.time}</span></div><button className="more-button" aria-label="More post options" onClick={() => setNotice("More post options will be available on published posts.")}>•••</button></div><p className="post-copy">{post.text}</p><div className="tag-row">{post.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>{post.image && <div className="post-image-wrap"><Image src={post.image} alt="Community post visual" width={1200} height={800} unoptimized className="post-image" /></div>}<div className="post-stats"><span>{post.likes + (liked.includes(post.id) ? 1 : 0)} appreciations</span><span>{post.comments} comments · Share</span></div><div className="post-actions"><button className={liked.includes(post.id) ? "post-action is-liked" : "post-action"} onClick={() => setLiked(old => old.includes(post.id) ? old.filter(id => id !== post.id) : [...old, post.id])}><span>♡</span> Appreciate</button><button className="post-action" onClick={() => setNotice("Comments will be enabled when the social backend is connected.")}><span>▢</span> Comment</button><button className="post-action" onClick={() => setNotice("Sharing will be enabled for published posts.")}><span>↗</span> Share</button><button className="post-action save-action" onClick={() => setNotice("Saved items will be available in your personal library.")}><span>▱</span></button></div></article>)}
+          {visiblePosts.map(post => <article className="post-card" key={post.id}><div className="post-header"><div className={"avatar " + post.color}>{post.initials}</div><div className="post-author"><strong>{post.name} <span className="verified">✓</span></strong><span>{post.handle} · {post.time}</span></div><button className="more-button" aria-label="More post options" onClick={() => setNotice("More post options will be available on published posts.")}>•••</button></div><p className="post-copy">{post.text}</p><div className="tag-row">{post.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>{post.image && <div className="post-image-wrap"><Image src={post.image} alt="Community post visual" width={1200} height={800} unoptimized className="post-image" /></div>}<div className="post-stats"><span>{post.likes + (liked.includes(post.id) ? 1 : 0)} appreciations</span><span>{post.comments} comments · Share</span></div><div className="post-actions"><button className={liked.includes(post.id) ? "post-action is-liked" : "post-action"} onClick={() => void toggleLike(post.id)}><span>♡</span> Appreciate</button><button className="post-action" onClick={() => setNotice("Comments will be enabled when the social backend is connected.")}><span>▢</span> Comment</button><button className="post-action" onClick={() => setNotice("Sharing will be enabled for published posts.")}><span>↗</span> Share</button><button className="post-action save-action" onClick={() => setNotice("Saved items will be available in your personal library.")}><span>▱</span></button></div></article>)}
           <div className="feed-end"><span>✦</span><p>You&apos;re all caught up for now.</p><small>More from your world is on the way.</small></div>
         </section>
         <aside className="right-sidebar">
@@ -68,7 +144,7 @@ export default function SmartTagHome() {
           <div className="right-footer">Made for people, powered by community.<br/><strong>SMARTTAG</strong> · GC Smart Technology</div>
         </aside>
       </div>
-      {showComposer && <div className="modal-backdrop" onClick={() => setShowComposer(false)}><section className="composer-modal" onClick={e => e.stopPropagation()}><div className="modal-heading"><div><span className="eyebrow">CREATE SOMETHING</span><h2>Share with your world</h2></div><button onClick={() => setShowComposer(false)}>×</button></div><div className="modal-user"><div className="avatar blue">YO</div><div><strong>Your profile</strong><span>Sharing with your community</span></div></div><textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} placeholder="What's happening in your world?" /><div className="modal-tools"><span>＋ Add to your story</span><span>▧ Photo / video</span><span># Add tags</span></div><button className="publish-button" disabled={!draft.trim()} onClick={publish}>Publish post <span>→</span></button><p className="demo-note">Demo mode: posts are only stored in this page session.</p></section></div>}
+      {showComposer && <div className="modal-backdrop" onClick={() => setShowComposer(false)}><section className="composer-modal" onClick={e => e.stopPropagation()}><div className="modal-heading"><div><span className="eyebrow">CREATE SOMETHING</span><h2>Share with your world</h2></div><button onClick={() => setShowComposer(false)}>×</button></div><div className="modal-user"><div className="avatar blue">YO</div><div><strong>Your profile</strong><span>Sharing with your community</span></div></div><textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)} placeholder="What's happening in your world?" /><div className="modal-tools"><span>＋ Add to your story</span><span>▧ Photo / video</span><span># Add tags</span></div><button className="publish-button" disabled={!draft.trim() || publishing} onClick={() => void publish()}>{publishing ? "Publishing…" : "Publish post"} <span>→</span></button><p className="demo-note">Demo mode: posts are only stored in this page session.</p></section></div>}
       <nav className="mobile-nav">{navItems.slice(0,5).map(item => <button key={item.label} className={active === item.label ? "mobile-active" : ""} onClick={() => setActive(item.label)}><span>{item.icon}</span><small>{item.label}</small></button>)}</nav>
     </main>
   );
